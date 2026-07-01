@@ -3,13 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta property="og:image" content="https://i.imgur.com/ZYGR4g3.png">
-<meta property="og:image:secure_url" content="https://i.imgur.com/ZYGR4g3.png">
 <title>Meta Ads Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+/* ── LIGHT theme (default) ── */
 :root{
+  --bg:#f5f5f4;--sf:#ffffff;--sf2:#f0efed;--sf3:#e8e7e4;
+  --br:rgba(0,0,0,.08);--brm:rgba(0,0,0,.14);--brs:rgba(0,0,0,.25);
+  --tx:#1a1a18;--txm:#6b6b67;--txh:#9b9b96;
+  --blue:#1877f2;--blue-bg:rgba(24,119,242,.1);--blue-tx:#1055b8;
+  --green:#16a34a;--green-bg:rgba(22,163,74,.1);--green-tx:#15803d;
+  --red:#dc2626;--red-bg:rgba(220,38,38,.1);--red-tx:#b91c1c;
+  --amber:#d97706;--amber-bg:rgba(217,119,6,.1);--amber-tx:#92400e;
+  --purple:#7c3aed;--purple-bg:rgba(124,58,237,.1);--purple-tx:#5b21b6;
+  --r:10px;--rs:6px;
+  --hdr-bg:rgba(255,255,255,0.95);
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+}
+/* ── DARK theme ── */
+[data-theme="dark"]{
   --bg:#0d0d0d;--sf:#161618;--sf2:#1e1e21;--sf3:#26262a;
   --br:rgba(255,255,255,.07);--brm:rgba(255,255,255,.12);--brs:rgba(255,255,255,.2);
   --tx:#f0f0ec;--txm:#8a8a88;--txh:#555552;
@@ -18,12 +31,13 @@
   --red:#f75555;--red-bg:rgba(247,85,85,.12);--red-tx:#fca5a5;
   --amber:#f5a623;--amber-bg:rgba(245,166,35,.12);--amber-tx:#fcd34d;
   --purple:#a78bfa;--purple-bg:rgba(167,139,250,.12);--purple-tx:#c4b5fd;
-  --r:10px;--rs:6px;
+  --hdr-bg:rgba(22,22,24,0.96);
+  --shadow:0 2px 8px rgba(0,0,0,.4);
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:13px;line-height:1.5;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:13px;line-height:1.5;min-height:100vh;transition:background .2s,color .2s}
 
 /* Header */
-.hdr{background:rgba(22,22,24,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:300}
+.hdr{background:var(--hdr-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--br);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:52px;position:sticky;top:0;z-index:300}
 .hdr-left{display:flex;align-items:center;gap:10px}
 .logo{width:30px;height:30px;border-radius:8px;background:#1877f2;display:flex;align-items:center;justify-content:center}
 .logo svg{width:17px;height:17px;fill:#fff}
@@ -124,7 +138,7 @@ input[type="text"]:focus,select:focus,input[type="number"]:focus{border-color:va
 /* Table */
 .tw{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:12px}
-thead{position:sticky;z-index:10}
+thead{position:sticky;top:0;z-index:10}
 th{text-align:left;font-size:10px;font-weight:600;color:var(--txm);padding:8px 11px;border-bottom:1px solid var(--br);white-space:nowrap;background:var(--sf2);text-transform:uppercase;letter-spacing:.4px;cursor:pointer;user-select:none}
 th:hover{color:var(--tx)}
 td{padding:8px 11px;border-bottom:1px solid var(--br);color:var(--tx);white-space:nowrap}
@@ -360,6 +374,7 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
   </div>
   <div class="hdr-right">
     <span class="lu" id="lu"></span>
+    <button id="theme-btn" onclick="toggleTheme()" title="Toggle theme">☀️ Light</button>
     <button onclick="setGemKey()">🔑 Gemini Key</button>
     <button onclick="refreshAll()">↻ Refresh</button>
     <button onclick="changeToken()">⚙ Token</button>
@@ -501,7 +516,7 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
 <!-- AI Chat Panel -->
 <div class="aip" id="aip">
   <div class="aip-hd">
-    <div class="aip-t"><div class="gem">G</div>Gemini AI</div>
+    <div class="aip-t"><div class="gem">A</div>Alzeena AI</div>
     <button class="mcl" onclick="toggleAI()">✕</button>
   </div>
   <div class="aip-body" id="aip-body">
@@ -520,7 +535,7 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
     </div>
   </div>
 </div>
-<button class="ai-btn" onclick="toggleAI()" title="Gemini AI">G</button>
+<button class="ai-btn" onclick="toggleAI()" title="Alzeena">A</button>
 
 <!-- Main -->
 <div class="main" id="main">
@@ -613,7 +628,7 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
     <div id="v-campaigns" class="hidden">
       <div class="card">
         <div class="thresh">
-          <div class="tf"><label>Max CPP</label><input type="number" id="tc" value="5" min="0" step="0.5" onchange="renderView()"></div>
+          <div class="tf"><label>Max CPP</label><input type="number" id="tc" value="2" min="0" step="0.5" onchange="renderView()"></div>
           <div class="tf"><label>Min ROAS</label><input type="number" id="troas" value="2" min="0" step="0.1" onchange="renderView()"></div>
           <div class="tleg">
             <span><span class="tld" style="background:rgba(62,207,142,.4)"></span>Good</span>
@@ -726,7 +741,7 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
 // ══════════════════════════════════════════
 const TK_KEY='mads_tk5', RG_KEY='mads_rg5', GEM_KEY='mads_gem';
 const API='https://graph.facebook.com/v19.0';
-const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 const TOK_DEF='';
 const COLS=['#4f8ef7','#3ecf8e','#a78bfa','#f5a623','#f75555','#2dd4bf','#fb923c','#e879f9','#34d399','#60a5fa','#f472b6','#fbbf24'];
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -887,30 +902,61 @@ function dpRenderOne(id,y,m,isL){
   h+=`<div class="dp-days">`;
   const first=new Date(y,m,1);const dow=first.getDay();const dim=new Date(y,m+1,0).getDate();
   const today=new Date();today.setHours(0,0,0,0);
+  const sIso=dpS?dpFmtISO(dpS):null;
+  const eIso=dpE?dpFmtISO(dpE):null;
+  const hovIso=dpHov?dpFmtISO(dpHov):null;
+  const todayIso=dpFmtISO(today);
   for(let i=0;i<dow;i++) h+=`<div class="dp-day emp"></div>`;
   for(let d=1;d<=dim;d++){
-    const date=new Date(y,m,d);const iso=dpFmtISO(date);
+    const iso=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     let cls='dp-day';
-    if(date.getTime()===today.getTime()) cls+=' tod';
-    if(dpS&&dpFmtISO(dpS)===iso) cls+=' ss';
-    if(dpE&&dpFmtISO(dpE)===iso) cls+=' se';
-    if(dpS&&dpE&&date>dpS&&date<dpE) cls+=' inr';
-    if(dpS&&!dpE&&dpHov){const mn=dpS<dpHov?dpS:dpHov;const mx=dpS<dpHov?dpHov:dpS;if(date>mn&&date<mx)cls+=' inr';if(dpFmtISO(dpHov)===iso&&date!==dpS)cls+=' se';}
+    if(iso===todayIso) cls+=' tod';
+    const isS=sIso===iso, isE=eIso===iso;
+    if(isS&&isE){cls+=' ss se';}
+    else if(isS){cls+=' ss';}
+    else if(isE){cls+=' se';}
+    if(sIso&&eIso&&iso>sIso&&iso<eIso) cls+=' inr';
+    // hover range preview
+    if(sIso&&!eIso&&hovIso&&iso!==sIso){
+      const lo=sIso<hovIso?sIso:hovIso;
+      const hi=sIso<hovIso?hovIso:sIso;
+      if(iso>lo&&iso<hi) cls+=' inr';
+      if(iso===hovIso) cls+=(sIso<hovIso?' se':' ss');
+    }
     h+=`<div class="${cls}" onclick="dpDC('${iso}')" onmouseenter="dpDH('${iso}')">${d}</div>`;
   }
   h+=`</div>`;
   el.innerHTML=h;
 }
 function dpDC(iso){
-  if(!dpCust)return;
-  const d=new Date(iso+'T12:00:00');
-  if(!dpS||dpE){dpS=d;dpE=null;dpHov=null;}
-  else{if(d<dpS){dpE=dpS;dpS=d;}else dpE=d;dpHov=null;}
-  dpUpdInps();dpRenderCals();
+  // Always allow clicking days - auto activate custom mode
+  dpCust=true;
+  dpPend=null;
+  document.querySelectorAll('.dp-pi').forEach(b=>b.classList.remove('on'));
+  document.getElementById('pre-custom')?.classList.add('on');
+  // Parse date safely using parts to avoid timezone issues
+  const parts=iso.split('-');
+  const d=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  if(!dpS||dpE){
+    // First click or reset: set start
+    dpS=d; dpE=null; dpHov=null;
+  } else {
+    // Second click: set end
+    if(d<dpS){
+      dpE=new Date(dpS.getTime()); dpS=new Date(d.getTime());
+    } else {
+      dpE=new Date(d.getTime());
+    }
+    dpHov=null;
+  }
+  dpUpdInps();
+  dpRenderCals();
 }
 function dpDH(iso){
   if(!dpCust||!dpS||dpE)return;
-  dpHov=new Date(iso+'T12:00:00');dpRenderCals();
+  const parts=iso.split('-');
+  dpHov=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+  dpRenderCals();
 }
 function dpSM(id,v){
   if(id==='dp-cl'){dpLM=parseInt(v);if(dpLM===dpRM&&dpLY===dpRY){dpRM=dpLM+1;if(dpRM>11){dpRM=0;dpRY++}}}
@@ -1141,6 +1187,8 @@ function renderCamp(){
       <td class="tr" style="font-size:11px;color:var(--txm)">${budget}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         <button style="font-size:11px;padding:3px 6px" onclick="openNote('${c.id}','${esc(c.name)}')" title="Note">📝</button>
+        <button style="font-size:11px;padding:3px 5px;background:var(--green-bg);color:var(--green-tx);border-color:rgba(62,207,142,.3)" onclick="quickBudget('${c.id}',1.2)" title="Budget +20%">+20%</button>
+        <button style="font-size:11px;padding:3px 5px;background:var(--red-bg);color:var(--red-tx);border-color:rgba(220,38,38,.3)" onclick="quickBudget('${c.id}',0.8)" title="Budget -20%">-20%</button>
         <button style="font-size:11px;padding:3px 6px" onclick="openBudgetModal('${c.id}')" title="Adjust budget">💰</button>
         <button style="font-size:11px;padding:3px 6px" onclick="openCloneModal('${c.id}')" title="Clone">📋</button>
       </td>
@@ -1442,23 +1490,72 @@ function aiQ(q){document.getElementById('ai-inp').value=q;sendAI()}
 async function sendAI(){
   const inp=document.getElementById('ai-inp');const q=inp.value.trim();if(!q)return;
   inp.value='';
-  addAIMsg(q,'user');addAIMsg('ভাবছি…','thinking');
-  const ctx=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,8).map(c=>`${c.name}: spend=${mn(c.spend)}, purchases=${c.purchases}, CPP=${mn(c.cpp)}, ROAS=${c.roas.toFixed(2)}x, status=${c.status}`).join('\n');
-  const prompt=`তুমি একজন Meta Ads বিশেষজ্ঞ। বাংলায় উত্তর দাও, সংক্ষিপ্ত ও practical।\n\nAds data (${rangeLbl}):\nTotal spend: ${mn(accounts.reduce((s,a)=>s+a.spend,0))}\nTotal purchases: ${accounts.reduce((s,a)=>s+a.purchases,0)}\nTop campaigns:\n${ctx}\n\nপ্রশ্ন: ${q}`;
+  addAIMsg(q,'user');
+  const thinking=addAIMsg('thinking');
+  // Build rich context
+  const tSpend=accounts.reduce((s,a)=>s+a.spend,0);
+  const tPur=accounts.reduce((s,a)=>s+a.purchases,0);
+  const tCPP=tPur>0?tSpend/tPur:0;
+  const tROAS=tSpend>0?accounts.filter(a=>a.roas>0).reduce((s,a)=>s+(a.spend*a.roas),0)/tSpend:0;
+  const topCamps=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,10);
+  const campCtx=topCamps.map(c=>`• ${c.name} (${c.accountName}): spend=${mn(c.spend)}, purchases=${c.purchases}, CPP=${mn(c.cpp)}, ROAS=${c.roas.toFixed(2)}x, CTR=${c.ctr.toFixed(2)}%, status=${c.status}`).join('\n');
+  const maxCPP=pf(document.getElementById('tc')?.value)||5;
+  const minROAS=pf(document.getElementById('troas')?.value)||2;
+  const badCamps=campaigns.filter(c=>c.purchases>0&&(c.cpp>maxCPP||c.roas<minROAS)&&c.status==='ACTIVE');
+  const goodCamps=campaigns.filter(c=>c.purchases>0&&c.cpp<=maxCPP&&c.roas>=minROAS&&c.status==='ACTIVE');
+  const prompt=`তুমি একজন অভিজ্ঞ Meta Ads বিশেষজ্ঞ এবং AI সহকারী। নিচের real-time ads data দেখে প্রশ্নের উত্তর দাও।
+
+## Current Ads Data (${rangeLbl})
+- Accounts: ${accounts.length} টি (${accounts.filter(a=>a.account_status===1).length} active)
+- Active campaigns: ${campaigns.filter(c=>c.status==='ACTIVE').length} টি (মোট ${campaigns.length})
+- Total spend: ${mn(tSpend)}
+- Total purchases: ${tPur}
+- Weighted CPP: ${tCPP>0?mn(tCPP):'N/A'}
+- Weighted ROAS: ${tROAS>0?tROAS.toFixed(2)+'x':'N/A'}
+- CPP target: ${mn(maxCPP)}, ROAS target: ${minROAS}x
+- ভালো campaigns (target পূরণ): ${goodCamps.length} টি
+- সমস্যার campaigns (target miss): ${badCamps.length} টি
+
+## Top campaigns by spend:
+${campCtx}
+
+${badCamps.length>0?'## সমস্যার campaigns:\n'+badCamps.slice(0,5).map(c=>`• ${c.name}: CPP=${mn(c.cpp)}, ROAS=${c.roas.toFixed(2)}x`).join('\n'):''}
+
+## নির্দেশনা:
+- বাংলায় উত্তর দাও (technical term ইংরেজিতে রাখো)
+- Actionable পরামর্শ দাও — "কী করতে হবে" স্পষ্ট বলো
+- প্রয়োজনে bullet point ব্যবহার করো
+- সংখ্যা দিয়ে বিশ্লেষণ করো
+
+প্রশ্ন: ${q}`;
   const reply=await gemini(prompt);
-  document.querySelector('.thinking')?.remove();
+  thinking.remove();
   addAIMsg(reply||'উত্তর পাওয়া যায়নি।','ai');
 }
 function addAIMsg(text,type){
   const body=document.getElementById('aip-body');
-  const d=document.createElement('div');d.className='aim '+type;d.textContent=text;
+  const d=document.createElement('div');
+  d.className='aim '+type;
+  // Render basic markdown: bold, bullet, newlines
+  if(type==='ai'){
+    d.innerHTML=text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/^## (.*)/gm,'<div style="font-weight:600;font-size:12px;margin:8px 0 3px;color:var(--tx)">$1</div>')
+      .replace(/^• /gm,'<span style="color:var(--blue);margin-right:4px">•</span>')
+      .replace(/^- /gm,'<span style="color:var(--blue);margin-right:4px">•</span>')
+      .replace(/\n/g,'<br>');
+  } else {
+    d.textContent=text;
+  }
   body.appendChild(d);body.scrollTop=body.scrollHeight;
+  return d;
 }
 async function gemini(prompt){
   const key=localStorage.getItem(GEM_KEY);
   if(!key){showToast('🔑 Gemini key set করো (header থেকে)','d');return null}
   try{
-    const r=await fetch(`${GEMINI_URL}?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:1000}})});
+    const r=await fetch(`${GEMINI_URL}?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:2048}})});
     const d=await r.json();
     if(d.error){showToast('Gemini error: '+d.error.message,'d');return null}
     return d.candidates?.[0]?.content?.parts?.[0]?.text||null;
@@ -1851,6 +1948,65 @@ function s(id,val){const el=document.getElementById(id);if(el)el.textContent=val
 function mn(n,cur){n=parseFloat(n)||0;if(cur&&cur!=='USD')return n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+cur;return'$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function num(n){n=parseInt(n)||0;if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1000)return(n/1000).toFixed(1)+'K';return n.toLocaleString()}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+// ══════════════════════════════════════════
+// THEME TOGGLE
+// ══════════════════════════════════════════
+function applyTheme(theme){
+  const root=document.documentElement;
+  if(theme==='dark'){
+    root.setAttribute('data-theme','dark');
+    const btn=document.getElementById('theme-btn');
+    if(btn){btn.textContent='🌙 Dark';}
+  } else {
+    root.removeAttribute('data-theme');
+    const btn=document.getElementById('theme-btn');
+    if(btn){btn.textContent='☀️ Light';}
+  }
+  localStorage.setItem('mads_theme',theme);
+  // re-render charts with new colors
+  if(charts.trend){try{renderAnalytics()}catch(e){}}
+  if(charts.aud){try{renderAudView()}catch(e){}}
+}
+function toggleTheme(){
+  const cur=localStorage.getItem('mads_theme')||'light';
+  applyTheme(cur==='dark'?'light':'dark');
+}
+// Apply saved theme on load (before showDash)
+(function(){
+  const saved=localStorage.getItem('mads_theme')||'light';
+  applyTheme(saved);
+})();
+
+
+// ══════════════════════════════════════════
+// QUICK BUDGET CHANGE (+20% / -20%)
+// ══════════════════════════════════════════
+async function quickBudget(campId, mult){
+  const c=campaigns.find(x=>x.id===campId);
+  if(!c||!c.daily_budget){
+    showToast('Budget set নেই এই campaign-এ','w','💰 বাটন চাপো manually set করতে');
+    return;
+  }
+  const newBudget=Math.max(1,Math.round(c.daily_budget*mult));
+  const arrow=mult>1?'↑':'↓';
+  const pct=mult>1?'+20%':'-20%';
+  showToast(`${arrow} Budget ${pct} করা হচ্ছে…`,'i',`${mn(c.daily_budget)} → ${mn(newBudget)}/day`);
+  try{
+    const cents=Math.round(newBudget*100);
+    const res=await fetch(`${API}/${campId}?access_token=${token}`,{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({daily_budget:cents})
+    });
+    const d=await res.json();
+    if(d.error){showToast('Budget update failed','d',d.error.message);return}
+    c.daily_budget=newBudget;
+    showToast(`✓ Budget updated ${pct}`,'i',`${esc(c.name)}: ${mn(newBudget)}/day`);
+    renderCamp();
+  }catch(e){showToast('Error','d',e.message)}
+}
+
 </script>
 </body>
 </html>

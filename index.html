@@ -739,9 +739,9 @@ tr.bad:hover td{background:rgba(247,85,85,.08)}
 // ══════════════════════════════════════════
 // CONSTANTS & STATE
 // ══════════════════════════════════════════
-const TK_KEY='mads_tk5', RG_KEY='mads_rg5', GEM_KEY='mads_gem';
+const TK_KEY='mads_tk5', RG_KEY='mads_rg5', GEM_KEY='mads_gem', CS_KEY='mads_cs5', CE_KEY='mads_ce5';
 const API='https://graph.facebook.com/v19.0';
-const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
 const TOK_DEF='';
 const COLS=['#4f8ef7','#3ecf8e','#a78bfa','#f5a623','#f75555','#2dd4bf','#fb923c','#e879f9','#34d399','#60a5fa','#f472b6','#fbbf24'];
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -759,7 +759,8 @@ let charts={trend:null,perf:null,aud:null};
 let selCamps=new Set();
 let campMeta={}; // {id:{label,note}}
 let curNoteId=null;
-let customStart=null, customEnd=null;
+let customStart=localStorage.getItem(CS_KEY)||null;
+let customEnd=localStorage.getItem(CE_KEY)||null;
 
 // Date picker state
 let dpLY,dpLM,dpRY,dpRM,dpS=null,dpE=null,dpHov=null,dpCust=false,dpPend=null;
@@ -824,8 +825,17 @@ function dpOpen(){
   document.getElementById('pre-'+range)?.classList.add('on');
   dpCust=(range==='custom');
   dpPend=null;
-  const {s,e}=dpRngDate(range);
-  dpS=s; dpE=e;
+  
+  if(range==='custom'&&customStart&&customEnd){
+    const sParts=customStart.split('-');
+    const eParts=customEnd.split('-');
+    dpS=new Date(parseInt(sParts[0]),parseInt(sParts[1])-1,parseInt(sParts[2]));
+    dpE=new Date(parseInt(eParts[0]),parseInt(eParts[1])-1,parseInt(eParts[2]));
+  } else {
+    const {s,e}=dpRngDate(range);
+    dpS=s; dpE=e;
+  }
+  
   dpUpdInps();
   dpRenderCals();
 }
@@ -836,6 +846,8 @@ function dpPre(r,lbl){
   dpCust=false; dpPend={r,lbl};
   const {s,e}=dpRngDate(r);
   dpS=s; dpE=e; dpUpdInps(); dpRenderCals();
+  localStorage.removeItem(CS_KEY);
+  localStorage.removeItem(CE_KEY);
 }
 function dpCustom(){
   document.querySelectorAll('.dp-pi').forEach(b=>b.classList.remove('on'));
@@ -843,12 +855,30 @@ function dpCustom(){
   dpCust=true; dpPend=null; dpS=null; dpE=null; dpHov=null; dpUpdInps(); dpRenderCals();
 }
 function dpApply(){
-  if(dpPend){range=dpPend.r;rangeLbl=dpPend.lbl;customStart=null;customEnd=null;dpUpdTrigger();dpClose();loadAll();return;}
-  if(dpCust&&dpS&&dpE){
+  if(dpPend){
+    range=dpPend.r;
+    rangeLbl=dpPend.lbl;
+    customStart=null;
+    customEnd=null;
+    dpUpdTrigger();
+    dpClose();
+    loadAll();
+    return;
+  }
+  if(dpCust&&dpS){
+    if(!dpE) dpE = dpS; 
     range='custom';
-    customStart=dpFmtISO(dpS);customEnd=dpFmtISO(dpE);
-    rangeLbl=dpFmtD(dpS)+' – '+dpFmtD(dpE);
-    dpUpdTrigger();dpClose();loadAll();return;
+    customStart=dpFmtISO(dpS);
+    customEnd=dpFmtISO(dpE);
+    
+    localStorage.setItem(CS_KEY, customStart);
+    localStorage.setItem(CE_KEY, customEnd);
+    
+    rangeLbl=dpS.getTime()===dpE.getTime()?dpFmtD(dpS):dpFmtD(dpS)+' – '+dpFmtD(dpE);
+    dpUpdTrigger();
+    dpClose();
+    loadAll();
+    return;
   }
   dpClose();
 }
@@ -889,7 +919,13 @@ function dpRenderCals(){dpRenderOne('dp-cl',dpLY,dpLM,true);dpRenderOne('dp-cr',
 function dpRenderOne(id,y,m,isL){
   const el=document.getElementById(id);
   const mOpts=MONTHS.map((n,i)=>`<option value="${i}" ${i===m?'selected':''}>${n}</option>`).join('');
-  const yOpts=[];for(let yr=2015;yr<=2027;yr++)yOpts.push(`<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`);
+  
+  const cy=new Date().getFullYear();
+  const yOpts=[];
+  for(let yr=cy-10;yr<=cy+2;yr++){
+    yOpts.push(`<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`);
+  }
+  
   let h=`<div class="dp-cal-hd">
     ${isL?`<button class="dp-nav" onclick="dpNav(-1)">&#8249;</button>`:'<div></div>'}
     <div class="dp-cal-title">
@@ -1552,14 +1588,39 @@ function addAIMsg(text,type){
   return d;
 }
 async function gemini(prompt){
-  const key=localStorage.getItem(GEM_KEY);
-  if(!key){showToast('🔑 Gemini key set করো (header থেকে)','d');return null}
-  try{
-    const r=await fetch(`${GEMINI_URL}?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.7,maxOutputTokens:2048}})});
-    const d=await r.json();
-    if(d.error){showToast('Gemini error: '+d.error.message,'d');return null}
-    return d.candidates?.[0]?.content?.parts?.[0]?.text||null;
-  }catch(e){showToast('Gemini error: '+e.message,'d');return null}
+  const localKey = localStorage.getItem(GEM_KEY);
+  
+  try {
+    let response;
+    
+    if (localKey) {
+      response = await fetch(`${GEMINI_URL}?key=${localKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+        })
+      });
+    } else {
+      response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+    }
+
+    const d = await response.json();
+    if (d.error) {
+      showToast('Gemini error: ' + d.error, 'd');
+      return null;
+    }
+    
+    return d.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (e) {
+    showToast('Gemini error: ' + e.message, 'd');
+    return null;
+  }
 }
 
 // ══════════════════════════════════════════

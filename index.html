@@ -87,8 +87,8 @@ button:disabled{opacity:.4;cursor:default}
 .dpa{margin-left:2px;font-size:10px;color:var(--txm)}
 .dp-ov{position:fixed;inset:0;z-index:9999;display:none}
 .dp-ov.open{display:block}
-.dp-bd{position:absolute;inset:0}
-.dp-pnl{position:absolute;background:var(--sf);border:1px solid var(--brm);border-radius:var(--r);box-shadow:0 12px 40px rgba(100,60,200,.2);display:flex;min-width:700px;max-height:90vh;overflow:hidden}
+.dp-bd{position:absolute;inset:0;z-index:1}
+.dp-pnl{position:absolute;z-index:2;background:var(--sf);border:1px solid var(--brm);border-radius:var(--r);box-shadow:0 12px 40px rgba(100,60,200,.2);display:flex;min-width:700px;max-height:90vh;overflow:hidden}
 .dp-pre{width:165px;flex-shrink:0;border-right:1px solid var(--br);padding:8px 0;overflow-y:auto;background:var(--sf2)}
 .dp-pre-t{font-size:10px;font-weight:700;color:var(--txh);text-transform:uppercase;letter-spacing:.6px;padding:8px 14px 3px}
 .dp-pi{display:block;width:100%;text-align:left;border:none;background:transparent;color:var(--txm);padding:7px 14px;font-size:12px;border-radius:0;cursor:pointer;font-family:inherit;border-left:2px solid transparent;transition:all .12s}
@@ -615,6 +615,7 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
           <button class="vtab on" id="vt-accounts" onclick="switchView('accounts')">📊 Accounts</button>
           <button class="vtab" id="vt-campaigns" onclick="switchView('campaigns')">📁 Campaigns</button>
           <button class="vtab" id="vt-analytics" onclick="switchView('analytics')">📈 Analytics</button>
+          <button class="vtab" id="vt-products" onclick="switchView('products')">📦 Product Report</button>
           <button class="vtab" id="vt-audience" onclick="switchView('audience')">👥 Audience</button>
           <button class="vtab" id="vt-creatives" onclick="switchView('creatives')">🎨 Creatives</button>
           <button class="vtab" id="vt-ai" onclick="switchView('ai')">🤖 AI Tools</button>
@@ -627,7 +628,6 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
             <option value="300000">5m</option>
           </select>
         </label>
-        <input type="text" id="srch" placeholder="Search…" oninput="renderView()" style="width:120px">
         <select id="sf" onchange="renderView()">
           <option value="">All status</option>
           <option value="ACTIVE">Active</option>
@@ -680,6 +680,7 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
         <div class="thresh">
           <div class="tf"><label>Max CPP</label><input type="number" id="tc" value="2" min="0" step="0.5" onchange="renderView()"></div>
           <div class="tf"><label>Min ROAS</label><input type="number" id="troas" value="2" min="0" step="0.1" onchange="renderView()"></div>
+          <input type="text" id="srch" class="camp-search" placeholder="Search campaign name, ID, account…" oninput="renderView()">
           <div class="tleg">
             <span><span class="tld" style="background:rgba(22,163,74,.5)"></span>Good</span>
             <span><span class="tld" style="background:rgba(220,38,38,.5)"></span>Needs attention</span>
@@ -794,6 +795,45 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
       <div class="card">
         <div class="ch"><div class="ct"><div class="ct-icon">🎯</div>Campaign performance — CPP/ROAS</div></div>
         <div class="cp"><div class="ch300"><canvas id="perf-cv"></canvas></div></div>
+      </div>
+    </div>
+
+
+    <!-- PRODUCT REPORT -->
+    <div id="v-products" class="hidden">
+      <div class="card">
+        <div class="ch">
+          <div class="ct"><div class="ct-icon">📦</div>Product Decision Dashboard</div>
+          <span class="csub">Website product API + Meta campaign performance</span>
+        </div>
+        <div id="product-report-summary"><div class="ltd">Loading product report…</div></div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="ch"><div class="ct"><div class="ct-icon">🏆</div>Winning Product Leaderboard</div><span class="csub">Scale / Boost decision</span></div>
+          <div class="tw" id="product-winning-wrap"><div class="ltd">Loading…</div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct"><div class="ct-icon">🛡️</div>Stock Based Budget Protection</div><span class="csub">Low stock / stock out warning</span></div>
+          <div class="tw" id="product-stock-protection-wrap"><div class="ltd">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <div class="ch"><div class="ct"><div class="ct-icon">🧠</div>Auto Product Decision Engine</div><span class="csub">Scale, watch, stop, launch test, dead stock</span></div>
+          <div class="tw" id="product-decision-wrap"><div class="ltd">Loading…</div></div>
+        </div>
+        <div class="card">
+          <div class="ch"><div class="ct"><div class="ct-icon">📏</div>Size-wise Stock + Demand Report</div><span class="csub">Size stock, demand risk, restock signal</span></div>
+          <div class="tw" id="product-size-demand-wrap"><div class="ltd">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><div class="ct"><div class="ct-icon">🎨</div>Product-wise Creative Refresh Alert</div><span class="csub">High spend, no purchase, high CPP, creative fatigue</span></div>
+        <div class="tw" id="product-creative-refresh-wrap"><div class="ltd">Loading…</div></div>
       </div>
     </div>
 
@@ -1005,7 +1045,7 @@ function setAutoRefresh(ms){
 // ═══════════════════════════════════════
 function switchView(v){
   curView=v;
-  ['accounts','campaigns','analytics','audience','creatives','ai'].forEach(n=>{
+  ['accounts','campaigns','analytics','products','audience','creatives','ai'].forEach(n=>{
     document.getElementById('v-'+n).classList.toggle('hidden',n!==v);
     document.getElementById('vt-'+n).classList.toggle('on',n===v);
   });
@@ -1017,6 +1057,7 @@ function renderView(){
   if(curView==='accounts')renderAcct();
   else if(curView==='campaigns')renderCamp();
   else if(curView==='analytics')renderAnalytics();
+  else if(curView==='products')renderProductIntelligence();
   else if(curView==='audience')renderAudView();
 }
 
@@ -1128,7 +1169,7 @@ function dpRenderOne(id,y,m,isL){
       if(iso>lo&&iso<hi)cls+=' inr';
       if(iso===hovISO)cls+=(sISO<hovISO?' se':' ss');
     }
-    h+=`<div class="${cls}" onclick="dpDC('${iso}')" onmouseenter="dpDH('${iso}')">${d}</div>`;
+    h+=`<div class="${cls}" data-iso="${iso}">${d}</div>`;
   }
   h+=`</div>`;
   el.innerHTML=h;
@@ -1163,6 +1204,21 @@ function dpUpdateApplyState(){
   if(!btn)return;
   btn.disabled=dpCust&&(!dpS||!dpE)&&!dpPend;
 }
+
+// Robust date click handler: fixes calendar day selection even when inline click is blocked by overlay/layer issues.
+document.addEventListener('click',function(e){
+  const day=e.target.closest&&e.target.closest('.dp-day[data-iso]');
+  if(!day||!document.getElementById('dp-ov')?.classList.contains('open'))return;
+  e.preventDefault();
+  e.stopPropagation();
+  if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+  dpDC(day.dataset.iso);
+},true);
+document.addEventListener('mouseover',function(e){
+  const day=e.target.closest&&e.target.closest('.dp-day[data-iso]');
+  if(!day||!document.getElementById('dp-ov')?.classList.contains('open'))return;
+  dpDH(day.dataset.iso);
+},true);
 
 // ═══════════════════════════════════════
 // API
@@ -1780,11 +1836,19 @@ function productTable(rows,empty){
   return rows.length?`<table><thead><tr><th>Product</th><th class="tr">Stock</th><th class="tr">Active/Ads</th><th class="tr">Orders</th><th class="tr">Spend</th><th class="tr">CPP</th><th class="tr">ROAS</th><th>Decision</th></tr></thead><tbody>${rows.map(x=>productRow(x.p,x.perf,x.decision)).join('')}</tbody></table>`:`<div class="ltd" style="padding:18px;font-size:12px">${empty}</div>`;
 }
 function renderProductIntelligence(){
-  const ids=['prod-boost-wrap','prod-alert-wrap','dead-stock-wrap','size-demand-wrap'];
-  if(!ids.some(id=>document.getElementById(id)))return;
-  if(!prodLoaded){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="ltd"><div class="spin"></div>Loading products…</div>'});loadProducts();return;}
-  if(prodErr){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=`<div class="ltd" style="color:var(--red)">Products API error: ${esc(prodErr)}</div>`});return;}
-  const enriched=products.map(p=>{const perf=productPerf(p);return{p,perf,decision:productDecision(p,perf)}});
+  const ids=['prod-boost-wrap','prod-alert-wrap','dead-stock-wrap','size-demand-wrap','creative-refresh-wrap','product-report-summary','product-winning-wrap','product-stock-protection-wrap','product-decision-wrap','product-size-demand-wrap','product-creative-refresh-wrap'];
+  const hasTargets=ids.some(id=>document.getElementById(id));
+  if(!hasTargets)return;
+  if(!prodLoaded){
+    ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="ltd"><div class="spin"></div>Loading products…</div>'});
+    loadProducts().then(()=>renderProductIntelligence());
+    return;
+  }
+  if(prodErr){
+    ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=`<div class="ltd" style="color:var(--red);padding:18px">Products API error: ${esc(prodErr)}<br><span style="color:var(--txm)">Website product API connect না হলে product report দেখাবে না।</span></div>`});
+    return;
+  }
+  const enriched=products.map(p=>{const perf=productPerf(p);return{p,perf,decision:productDecision(p,perf)}}).sort((a,b)=>b.decision.rank-a.decision.rank||b.perf.purchases-a.perf.purchases||b.p.totalStock-a.p.totalStock);
   const winners=enriched.filter(x=>x.decision.label.includes('Scale')).sort((a,b)=>b.perf.purchases-a.perf.purchases||a.perf.cpp-b.perf.cpp).slice(0,12);
   const protect=enriched.filter(x=>x.p.totalStock<=10||x.decision.label.includes('Protect')||x.decision.label.includes('stock out')).sort((a,b)=>a.p.totalStock-b.p.totalStock||b.perf.spend-a.perf.spend).slice(0,12);
   const dead=enriched.filter(x=>x.decision.label.includes('Dead stock')||x.decision.label.includes('Launch test')).sort((a,b)=>b.p.totalStock-a.p.totalStock).slice(0,12);
@@ -1792,37 +1856,53 @@ function renderProductIntelligence(){
   const activeProducts=enriched.filter(x=>x.perf.campaigns>0).length;
   const lowStockActive=enriched.filter(x=>x.perf.active>0&&x.p.totalStock<=10).length;
   const noPurchaseSpend=enriched.filter(x=>x.perf.spend>=10&&x.perf.purchases===0).length;
+  const totalStock=enriched.reduce((s,x)=>s+x.p.totalStock,0);
   const topName=winners[0]?.p?.code||winners[0]?.p?.name||'—';
   const summary=`<div class="pi-grid">
     <div class="pi-tile"><div class="pi-k">Winning products</div><div class="pi-v">${winners.length}</div><div class="pi-s">Top: ${esc(topName)}</div></div>
     <div class="pi-tile"><div class="pi-k">Budget protection</div><div class="pi-v">${lowStockActive}</div><div class="pi-s">Active ads with low stock</div></div>
     <div class="pi-tile"><div class="pi-k">Creative refresh</div><div class="pi-v">${refresh.length}</div><div class="pi-s">High spend / CPP issue</div></div>
     <div class="pi-tile"><div class="pi-k">Matched products</div><div class="pi-v">${activeProducts}</div><div class="pi-s">Campaign name থেকে product match</div></div>
+    <div class="pi-tile"><div class="pi-k">Total products</div><div class="pi-v">${products.length}</div><div class="pi-s">API products loaded</div></div>
+    <div class="pi-tile"><div class="pi-k">Total stock</div><div class="pi-v">${num(totalStock)}</div><div class="pi-s">All product stock from API</div></div>
   </div>`;
   const b=document.getElementById('prod-boost-wrap');if(b)b.innerHTML=summary+productTable(winners,'Scale করার মতো winning product পাওয়া যায়নি।');
   const a=document.getElementById('prod-alert-wrap');if(a)a.innerHTML=productTable(protect,'Stock based budget protection alert নেই।');
   const d=document.getElementById('dead-stock-wrap');if(d)d.innerHTML=productTable(dead,'High stock / low demand product পাওয়া যায়নি।');
+
+  const sum=document.getElementById('product-report-summary');if(sum)sum.innerHTML=summary;
+  const win=document.getElementById('product-winning-wrap');if(win)win.innerHTML=productTable(winners,'Winning product পাওয়া যায়নি। Campaign name এর সাথে product code match হলে leaderboard দেখাবে।');
+  const prot=document.getElementById('product-stock-protection-wrap');if(prot)prot.innerHTML=productTable(protect,'Low stock / stock out active ads alert নেই।');
+  const dec=document.getElementById('product-decision-wrap');if(dec)dec.innerHTML=productTable(enriched.slice(0,30),'Product decision report empty। Products API data পাওয়া যায়নি।');
+
   renderSizeDemand(enriched);
   renderCreativeRefresh(refresh);
 }
 function renderSizeDemand(enriched){
-  const wrap=document.getElementById('size-demand-wrap');if(!wrap)return;
+  const targets=['size-demand-wrap','product-size-demand-wrap'].map(id=>document.getElementById(id)).filter(Boolean);
+  if(!targets.length)return;
   const rows=enriched.filter(x=>x.p.sizes.length).sort((a,b)=>b.perf.purchases-a.perf.purchases||b.p.totalStock-a.p.totalStock).slice(0,12);
-  if(!rows.length){wrap.innerHTML='<div class="ltd" style="padding:18px;font-size:12px">Size stock data পাওয়া যায়নি। API response এ size/details না থাকলে এই report empty থাকবে।</div>';return;}
-  wrap.innerHTML=rows.map(x=>{
-    const max=Math.max(...x.p.sizes.map(s=>s.qty),1);
-    const demand=x.perf.purchases>=5?'High demand':x.perf.purchases>=1?'Demand':'No demand';
-    return`<div style="padding:12px 14px;border-bottom:1px solid var(--br)">
-      <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:9px;align-items:center"><div>${productMini(x.p)}</div><div style="font-size:11px;color:var(--txm);white-space:nowrap">Orders: <b>${x.perf.purchases||0}</b><br>CPP: <b>${x.perf.cpp?mn(x.perf.cpp):'—'}</b></div></div>
-      ${x.p.sizes.map(s=>{const pct=Math.max(4,Math.round(s.qty/max*100));const tag=s.qty<=2?'Re-stock':(x.perf.purchases>=3&&s.qty<=5?'Risk':'OK');const low=s.qty<=2?'low':'ok';return`<div class="demand-grid"><div class="bn" style="text-align:left">${esc(s.name)}</div><div class="bt"><div class="bf" style="width:${pct}%"></div></div><div class="bv ${stockClass(s.qty)}">${s.qty}</div><div class="demand-tag ${low}">${tag}</div></div>`}).join('')}
-      <div style="font-size:10px;color:var(--txh);margin-top:6px">${demand} · ${esc(x.decision.reason)}</div>
-    </div>`;
-  }).join('');
+  let html='';
+  if(!rows.length){
+    html='<div class="ltd" style="padding:18px;font-size:12px">Size stock data পাওয়া যায়নি। API response এ size/details না থাকলে এই report empty থাকবে।</div>';
+  }else{
+    html=rows.map(x=>{
+      const max=Math.max(...x.p.sizes.map(s=>s.qty),1);
+      const demand=x.perf.purchases>=5?'High demand':x.perf.purchases>=1?'Demand':'No demand';
+      return`<div style="padding:12px 14px;border-bottom:1px solid var(--br)">
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:9px;align-items:center"><div>${productMini(x.p)}</div><div style="font-size:11px;color:var(--txm);white-space:nowrap">Orders: <b>${x.perf.purchases||0}</b><br>CPP: <b>${x.perf.cpp?mn(x.perf.cpp):'—'}</b></div></div>
+        ${x.p.sizes.map(s=>{const pct=Math.max(4,Math.round(s.qty/max*100));const tag=s.qty<=2?'Re-stock':(x.perf.purchases>=3&&s.qty<=5?'Risk':'OK');const low=s.qty<=2?'low':'ok';return`<div class="demand-grid"><div class="bn" style="text-align:left">${esc(s.name)}</div><div class="bt"><div class="bf" style="width:${pct}%"></div></div><div class="bv ${stockClass(s.qty)}">${s.qty}</div><div class="demand-tag ${low}">${tag}</div></div>`}).join('')}
+        <div style="font-size:10px;color:var(--txh);margin-top:6px">${demand} · ${esc(x.decision.reason)}</div>
+      </div>`;
+    }).join('');
+  }
+  targets.forEach(wrap=>wrap.innerHTML=html);
 }
 function renderCreativeRefresh(rows){
-  const wrap=document.getElementById('creative-refresh-wrap');
-  if(!wrap)return;
-  wrap.innerHTML=productTable(rows,'Creative refresh alert নেই।');
+  ['creative-refresh-wrap','product-creative-refresh-wrap'].forEach(id=>{
+    const wrap=document.getElementById(id);
+    if(wrap)wrap.innerHTML=productTable(rows,'Creative refresh alert নেই।');
+  });
 }
 async function renderBestTimeDay(){
   const wrap=document.getElementById('best-time-wrap');if(!wrap)return;

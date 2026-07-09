@@ -377,6 +377,31 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
 .tab-pill{font-size:11px;padding:4px 12px;border-radius:99px;border:1px solid var(--brm);background:transparent;color:var(--txm)}
 .tab-pill.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 
+
+/* Product Intelligence v2 */
+.pi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 14px 14px}
+.pi-tile{background:linear-gradient(180deg,var(--sf),var(--sf2));border:1px solid var(--br);border-radius:12px;padding:13px 14px;box-shadow:var(--sh)}
+.pi-k{font-size:10px;color:var(--txh);font-weight:800;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.pi-v{font-size:22px;font-weight:850;letter-spacing:-.5px;color:var(--tx)}
+.pi-s{font-size:11px;color:var(--txm);margin-top:3px;line-height:1.35}
+.action-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.action-scale{background:var(--gbg);color:var(--gtx)}
+.action-guard{background:var(--rbg);color:var(--rtx)}
+.action-refresh{background:var(--abg);color:var(--atx)}
+.action-watch{background:var(--bbg);color:var(--btx)}
+.action-launch{background:var(--pril);color:var(--pritx)}
+.product-mini{display:flex;align-items:center;gap:9px;min-width:250px;max-width:360px}
+.product-mini img{width:38px;height:38px;object-fit:cover;border-radius:8px;border:1px solid var(--br);background:var(--sf2)}
+.product-mini .pn{font-weight:700;font-size:12px;white-space:normal;line-height:1.25}
+.product-mini .pc{font-size:10px;color:var(--txh);margin-top:2px}
+.stock-hot{color:var(--green);font-weight:800}.stock-low{color:var(--red);font-weight:800}.stock-mid{color:var(--amber);font-weight:800}
+.demand-grid{display:grid;grid-template-columns:72px 1fr 48px 88px;align-items:center;gap:8px;margin-bottom:6px}
+.demand-tag{font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;text-align:center;background:var(--sf3);color:var(--txm)}
+.demand-tag.low{background:var(--rbg);color:var(--rtx)}.demand-tag.ok{background:var(--gbg);color:var(--gtx)}
+.campaign-all-note{font-size:11px;color:var(--txm);padding:9px 14px;border-top:1px solid var(--br);background:var(--sf2)}
+.dp-ft .btn-pri[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
+@media(max-width:760px){.dp-pnl{min-width:calc(100vw - 16px);left:8px!important;right:8px;flex-direction:column}.dp-pre{width:100%;display:flex;overflow-x:auto;border-right:0;border-bottom:1px solid var(--br)}.dp-pre-t{display:none}.dp-pi{min-width:max-content;border-left:0;border-bottom:2px solid transparent}.dp-pi.on{border-bottom-color:var(--pri)}.dp-cals{flex-direction:column}.dp-cal+.dp-cal{margin-left:0;margin-top:14px;padding-left:0;padding-top:14px;border-left:0;border-top:1px solid var(--br)}}
+
 /* Misc */
 .tg{color:var(--green)}.tr2{color:var(--red)}.tm{color:var(--txm)}
 .hidden{display:none!important}
@@ -432,7 +457,7 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
         </div>
         <div style="display:flex;gap:6px">
           <button onclick="dpClose()">Cancel</button>
-          <button class="btn-pri" onclick="dpApply()">Update</button>
+          <button class="btn-pri" id="dp-apply" onclick="dpApply()">Update</button>
         </div>
       </div>
     </div>
@@ -763,6 +788,10 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
         </div>
       </div>
       <div class="card">
+        <div class="ch"><div class="ct"><div class="ct-icon">🎨</div>Product-wise Creative Refresh Alert</div><span class="csub">High spend + no order / CPP spike</span></div>
+        <div class="tw" id="creative-refresh-wrap"><div class="ltd">Loading products…</div></div>
+      </div>
+      <div class="card">
         <div class="ch"><div class="ct"><div class="ct-icon">🎯</div>Campaign performance — CPP/ROAS</div></div>
         <div class="cp"><div class="ch300"><canvas id="perf-cv"></canvas></div></div>
       </div>
@@ -885,12 +914,12 @@ let selIds=new Set();
 let accounts=[],campaigns=[],audData={},rawAccounts=[];
 let products=[],prodErr='',prodLoaded=false,timeReportCacheKey='',timeReportCache=null;
 let aSort={f:'spend',d:-1},cSort={f:'spend',d:-1};
-let cPage=1;const cPS=30;
+let cPage=1;const cPS=100000;
 let charts={trend:null,perf:null,aud:null};
 let selCamps=new Set();
 let campMeta={};
 let curNoteId=null;
-let customStart=null,customEnd=null;
+let customStart=localStorage.getItem('mads_custom_start')||null,customEnd=localStorage.getItem('mads_custom_end')||null;
 let dpLY,dpLM,dpRY,dpRM,dpS=null,dpE=null,dpHov=null,dpCust=false,dpPend=null;
 let expandedCamps=new Set();
 let adsetCache={};
@@ -920,8 +949,8 @@ function showDash(){
   document.getElementById('tok-sc').classList.add('hidden');
   document.getElementById('tok-sc').style.display='none';
   document.getElementById('dash').classList.remove('hidden');
-  const m={today:'Today',yesterday:'Yesterday',last_7d:'Last 7 days',last_14d:'Last 14 days',last_28d:'Last 28 days',last_30d:'Last 30 days',this_week:'This week',last_week:'Last week',this_month:'This month',last_month:'Last month',this_quarter:'This quarter',this_year:'This year',maximum:'Maximum'};
-  rangeLbl=m[range]||'Today';
+  const m={today:'Today',yesterday:'Yesterday',last_7d:'Last 7 days',last_14d:'Last 14 days',last_28d:'Last 28 days',last_30d:'Last 30 days',this_week:'This week',last_week:'Last week',this_month:'This month',last_month:'Last month',this_quarter:'This quarter',this_year:'This year',maximum:'Maximum',custom:'Custom range'};
+  rangeLbl=range==='custom'&&customStart&&customEnd?dpFmtD(dpParseISO(customStart))+' – '+dpFmtD(dpParseISO(customEnd)):(m[range]||'Today');
   dpUpdTrigger();
   updateAutoRefreshUI();
   startAutoRefresh();
@@ -1003,32 +1032,35 @@ function dpOpen(){
   if(left+700>window.innerWidth)left=window.innerWidth-710;
   if(left<6)left=6;
   pnl.style.top=top+'px';pnl.style.left=left+'px';
-  const now=new Date();
-  dpLY=now.getFullYear();dpLM=now.getMonth();
-  dpRY=now.getFullYear();dpRM=now.getMonth()+1;
-  if(dpRM>11){dpRM=0;dpRY++}
   document.querySelectorAll('.dp-pi').forEach(b=>b.classList.remove('on'));
   document.getElementById('pre-'+range)?.classList.add('on');
   dpCust=(range==='custom');dpPend=null;
-  const {s,e}=dpRngDate(range);dpS=s;dpE=e;
-  dpUpdInps();dpRenderCals();
+  const rng=dpRngDate(range);dpS=rng.s;dpE=rng.e;
+  const base=dpS||new Date();
+  dpLY=base.getFullYear();dpLM=base.getMonth();
+  dpRY=dpLY;dpRM=dpLM+1;
+  if(dpRM>11){dpRM=0;dpRY++}
+  dpUpdInps();dpRenderCals();dpUpdateApplyState();
 }
 function dpClose(){document.getElementById('dp-ov').classList.remove('open')}
 function dpPre(r,lbl){
   document.querySelectorAll('.dp-pi').forEach(b=>b.classList.remove('on'));
   document.getElementById('pre-'+r)?.classList.add('on');
   dpCust=false;dpPend={r,lbl};
-  const {s,e}=dpRngDate(r);dpS=s;dpE=e;dpUpdInps();dpRenderCals();
+  const {s,e}=dpRngDate(r);dpS=s;dpE=e;dpUpdInps();dpRenderCals();dpUpdateApplyState();
 }
 function dpCustom(){
   document.querySelectorAll('.dp-pi').forEach(b=>b.classList.remove('on'));
   document.getElementById('pre-custom')?.classList.add('on');
-  dpCust=true;dpPend=null;dpS=null;dpE=null;dpHov=null;dpUpdInps();dpRenderCals();
+  dpCust=true;dpPend=null;
+  if(customStart&&customEnd){dpS=dpParseISO(customStart);dpE=dpParseISO(customEnd);}else{dpS=null;dpE=null;}
+  dpHov=null;dpUpdInps();dpRenderCals();dpUpdateApplyState();
 }
 function dpApply(){
-  if(dpPend){range=dpPend.r;rangeLbl=dpPend.lbl;customStart=null;customEnd=null;dpUpdTrigger();dpClose();loadAll();return;}
+  if(dpPend){range=dpPend.r;rangeLbl=dpPend.lbl;customStart=null;customEnd=null;localStorage.removeItem('mads_custom_start');localStorage.removeItem('mads_custom_end');dpUpdTrigger();dpClose();loadAll();return;}
   if(dpCust&&dpS&&dpE){
     range='custom';customStart=dpISO(dpS);customEnd=dpISO(dpE);
+    localStorage.setItem('mads_custom_start',customStart);localStorage.setItem('mads_custom_end',customEnd);
     rangeLbl=dpFmtD(dpS)+' – '+dpFmtD(dpE);
     dpUpdTrigger();dpClose();loadAll();return;
   }
@@ -1036,12 +1068,13 @@ function dpApply(){
 }
 function dpUpdTrigger(){
   let lbl=rangeLbl;
-  if(range==='custom'&&customStart&&customEnd)lbl=customStart+' – '+customEnd;
+  if(range==='custom'&&customStart&&customEnd)lbl=dpFmtD(dpParseISO(customStart))+' – '+dpFmtD(dpParseISO(customEnd));
   else{const{s,e}=dpRngDate(range);if(s&&e&&dpISO(s)===dpISO(e))lbl=rangeLbl+': '+dpFmtD(s);else if(s&&e)lbl=rangeLbl+': '+dpFmtD(s)+' – '+dpFmtD(e);}
   document.getElementById('dp-lbl').textContent=lbl;
   localStorage.setItem(RG,range);
 }
 function dpRngDate(p){
+  if(p==='custom'&&customStart&&customEnd)return{s:dpParseISO(customStart),e:dpParseISO(customEnd)};
   const now=new Date();const t=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   let s=new Date(t),e=new Date(t);
   if(p==='yesterday'){s.setDate(s.getDate()-1);e=new Date(s)}
@@ -1059,6 +1092,7 @@ function dpRngDate(p){
   return{s,e};
 }
 function dpISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function dpParseISO(v){const p=String(v||'').split('-').map(Number);return new Date(p[0]||new Date().getFullYear(),(p[1]||1)-1,p[2]||1)}
 function dpFmtD(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
 function dpUpdInps(){
   document.getElementById('dp-s').value=dpS?dpFmtD(dpS):'';
@@ -1068,7 +1102,7 @@ function dpRenderCals(){dpRenderOne('dp-cl',dpLY,dpLM,true);dpRenderOne('dp-cr',
 function dpRenderOne(id,y,m,isL){
   const el=document.getElementById(id);
   const mOpts=MONTHS.map((n,i)=>`<option value="${i}" ${i===m?'selected':''}>${n}</option>`).join('');
-  const yOpts=[];for(let yr=2015;yr<=2027;yr++)yOpts.push(`<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`);
+  const yOpts=[];const cy=new Date().getFullYear()+2;for(let yr=2015;yr<=cy;yr++)yOpts.push(`<option value="${yr}" ${yr===y?'selected':''}>${yr}</option>`);
   let h=`<div class="dp-cal-hd">
     ${isL?`<button class="dp-nav" onclick="dpNav(-1)">&#8249;</button>`:'<div></div>'}
     <div class="dp-cal-title"><select onchange="dpSM('${id}',this.value)">${mOpts}</select><select onchange="dpSY('${id}',this.value)">${yOpts.join('')}</select></div>
@@ -1107,7 +1141,7 @@ function dpDC(iso){
   const d=new Date(parseInt(pts[0]),parseInt(pts[1])-1,parseInt(pts[2]));
   if(!dpS||dpE){dpS=d;dpE=null;dpHov=null;}
   else{dpE=d<dpS?new Date(dpS.getTime()):new Date(d.getTime());if(d<dpS)dpS=new Date(d.getTime());dpHov=null;}
-  dpUpdInps();dpRenderCals();
+  dpUpdInps();dpRenderCals();dpUpdateApplyState();
 }
 function dpDH(iso){
   if(!dpCust||!dpS||dpE)return;
@@ -1123,6 +1157,11 @@ function dpNav(d){
   dpLM+=d;if(dpLM>11){dpLM=0;dpLY++}if(dpLM<0){dpLM=11;dpLY--}
   dpRM=dpLM+1;dpRY=dpLY;if(dpRM>11){dpRM=0;dpRY++}
   dpRenderCals();
+}
+function dpUpdateApplyState(){
+  const btn=document.getElementById('dp-apply');
+  if(!btn)return;
+  btn.disabled=dpCust&&(!dpS||!dpE)&&!dpPend;
 }
 
 // ═══════════════════════════════════════
@@ -1388,8 +1427,8 @@ function renderCamp(){
   });
   data=applyCampQuickFilter(data);
   data.sort((a,b)=>cSort.d*((a[cSort.f]||0)>(b[cSort.f]||0)?1:-1));
-  const total=data.length;const pages=Math.max(1,Math.ceil(total/cPS));
-  cPage=Math.min(cPage,pages);const pd=data.slice((cPage-1)*cPS,cPage*cPS);
+  const total=data.length;const pages=1;
+  cPage=1;const pd=data;
   s('camp-cnt',total+' campaigns');
   if(!pd.length){document.getElementById('ctb').innerHTML=`<tr><td colspan="16" class="ltd">No campaigns found</td></tr>`;document.getElementById('cpagi').innerHTML='';return}
   const mx=Math.max(...data.map(c=>c.spend),1);
@@ -1437,7 +1476,7 @@ function renderCamp(){
     return rows;
   }).join('');
   const pEl=document.getElementById('cpagi');
-  pEl.innerHTML=pages<=1?'':`<span>Page ${cPage}/${pages} · ${total} campaigns</span><div class="pagi-b"><button onclick="goPage(${cPage-1})" ${cPage<=1?'disabled':''}>← Prev</button><button onclick="goPage(${cPage+1})" ${cPage>=pages?'disabled':''}>Next →</button></div>`;
+  pEl.innerHTML=`<div class="campaign-all-note">Showing all ${total} campaigns on this page — no next page needed.</div>`;
 }
 function goPage(p){cPage=p;renderCamp()}
 
@@ -1686,12 +1725,14 @@ async function loadProducts(force=false){
   return products;
 }
 function normalizeProduct(p){
-  const details=Array.isArray(p.details)?p.details:[];
-  const sizes=details.map(d=>({name:d.size?.size_name||d.size_name||String(d.product_size_id||'Size'),qty:pi(d.pro_qty),active:d.active!==0})).filter(x=>x.active);
-  const totalStock=sizes.reduce((s,x)=>s+x.qty,0);
-  const img=p.product_image||p.image||p.thumbnail||'';
-  const price=pf(p.discount_price)||pf(p.flash_sell_price)||pf(p.sell_price)||0;
-  return{raw:p,id:p.id,name:p.product_name||p.name||'',code:p.product_code||p.code||'',slug:p.slug||'',details:p.product_details||'',image:img,price,sellPrice:pf(p.sell_price),discountPrice:pf(p.discount_price),totalStock,sizes,status:p.product_status||p.status};
+  const rawDetails=Array.isArray(p.details)?p.details:(Array.isArray(p.product_details)?p.product_details:(Array.isArray(p.variations)?p.variations:[]));
+  const sizes=rawDetails.map(d=>({name:d.size?.size_name||d.size_name||d.size||String(d.product_size_id||'Size'),qty:pi(d.pro_qty??d.qty??d.stock??d.quantity),active:d.active!==0&&d.status!==0})).filter(x=>x.active);
+  const apiStock=pi(p.total_stock??p.stock??p.qty??p.quantity);
+  const totalStock=sizes.length?sizes.reduce((s,x)=>s+x.qty,0):apiStock;
+  const img=p.product_image||p.image||p.thumbnail||p.featured_image||'';
+  const price=pf(p.discount_price)||pf(p.flash_sell_price)||pf(p.sell_price)||pf(p.price)||0;
+  const detailText=typeof p.product_details==='string'?p.product_details:(typeof p.details==='string'?p.details:'');
+  return{raw:p,id:p.id,name:p.product_name||p.name||'',code:p.product_code||p.code||p.sku||'',slug:p.slug||'',details:detailText,image:img,price,sellPrice:pf(p.sell_price)||pf(p.regular_price),discountPrice:pf(p.discount_price),totalStock,sizes,status:p.product_status||p.status};
 }
 function normKey(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
 function firstCode(v){return String(v||'').trim().split(/\s+/)[0]||''}
@@ -1706,33 +1747,82 @@ function productPerf(p){
   const roasSpend=cs.filter(c=>c.roas>0).reduce((s,c)=>s+c.spend,0);
   return{campaigns:cs.length,active:cs.filter(c=>c.status==='ACTIVE').length,spend,purchases,cpp:purchases?spend/purchases:0,roas:roasSpend?cs.filter(c=>c.roas>0).reduce((s,c)=>s+c.spend*c.roas,0)/roasSpend:0};
 }
-function productRow(p,perf,action){
-  const img=p.image?`<img src="${esc(p.image)}" style="width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid var(--br);margin-right:8px">`:'';
-  return`<tr><td style="padding:8px 12px;border-bottom:1px solid var(--br)"><div style="display:flex;align-items:center;min-width:210px">${img}<div><div style="font-weight:600;font-size:12px;white-space:normal">${esc(p.name)}</div><div style="font-size:10px;color:var(--txh)">${esc(p.code||p.slug)}</div></div></div></td><td class="tr" style="padding:8px 12px;border-bottom:1px solid var(--br)">${p.totalStock}</td><td class="tr" style="padding:8px 12px;border-bottom:1px solid var(--br)">${perf.purchases||'—'}</td><td class="tr" style="padding:8px 12px;border-bottom:1px solid var(--br)">${perf.spend?mn(perf.spend):'—'}</td><td style="padding:8px 12px;border-bottom:1px solid var(--br)"><span class="badge ${action.tone}">${esc(action.label)}</span></td></tr>`;
+function productThumb(p){return p.image?`<img src="${esc(p.image)}" loading="lazy" onerror="this.style.display='none'">`:''}
+function stockClass(q){return q<=5?'stock-low':q<=15?'stock-mid':'stock-hot'}
+function productMini(p){return `<div class="product-mini">${productThumb(p)}<div><div class="pn">${esc(p.name)}</div><div class="pc">${esc(p.code||p.slug||'No code')} · ৳${num(p.price||p.sellPrice||0)}</div></div></div>`}
+function productDecision(p,perf){
+  const maxCPP=pf(document.getElementById('tc')?.value)||2;
+  const minROAS=pf(document.getElementById('troas')?.value)||2;
+  if(p.totalStock<=0)return{label:'Stop ads — stock out',tone:'action-guard',rank:0,reason:'Stock 0'};
+  if(p.totalStock<=5&&perf.active)return{label:'Protect budget',tone:'action-guard',rank:10,reason:'Active ads + very low stock'};
+  if(perf.purchases>=3&&perf.cpp>0&&perf.cpp<=maxCPP&&p.totalStock>=20)return{label:'Scale / Boost',tone:'action-scale',rank:100,reason:'Low CPP + enough stock'};
+  if(perf.spend>=10&&perf.purchases===0)return{label:'Stop / New creative',tone:'action-refresh',rank:25,reason:'Spend আছে, purchase নেই'};
+  if(perf.purchases>0&&perf.cpp>maxCPP*1.6)return{label:'Creative refresh',tone:'action-refresh',rank:45,reason:'CPP rising'};
+  if(p.totalStock>=30&&perf.purchases<=1)return{label:'Dead stock push',tone:'action-watch',rank:55,reason:'High stock, low demand'};
+  if(p.totalStock>=20&&!perf.campaigns)return{label:'Launch test ad',tone:'action-launch',rank:50,reason:'Stock আছে, ads match নেই'};
+  return{label:'Watch',tone:'action-watch',rank:40,reason:'Monitor'};
+}
+function productRow(p,perf,decision){
+  const cpp=perf.cpp?mn(perf.cpp):'—';
+  const roas=perf.roas?perf.roas.toFixed(2)+'x':'—';
+  return`<tr>
+    <td>${productMini(p)}</td>
+    <td class="tr"><span class="${stockClass(p.totalStock)}">${p.totalStock}</span></td>
+    <td class="tr">${perf.active}/${perf.campaigns}</td>
+    <td class="tr">${perf.purchases||'—'}</td>
+    <td class="tr">${perf.spend?mn(perf.spend):'—'}</td>
+    <td class="tr">${cpp}</td>
+    <td class="tr">${roas}</td>
+    <td><span class="action-pill ${decision.tone}">${esc(decision.label)}</span><div style="font-size:10px;color:var(--txh);margin-top:3px">${esc(decision.reason)}</div></td>
+  </tr>`;
+}
+function productTable(rows,empty){
+  return rows.length?`<table><thead><tr><th>Product</th><th class="tr">Stock</th><th class="tr">Active/Ads</th><th class="tr">Orders</th><th class="tr">Spend</th><th class="tr">CPP</th><th class="tr">ROAS</th><th>Decision</th></tr></thead><tbody>${rows.map(x=>productRow(x.p,x.perf,x.decision)).join('')}</tbody></table>`:`<div class="ltd" style="padding:18px;font-size:12px">${empty}</div>`;
 }
 function renderProductIntelligence(){
   const ids=['prod-boost-wrap','prod-alert-wrap','dead-stock-wrap','size-demand-wrap'];
   if(!ids.some(id=>document.getElementById(id)))return;
   if(!prodLoaded){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='<div class="ltd"><div class="spin"></div>Loading products…</div>'});loadProducts();return;}
   if(prodErr){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=`<div class="ltd" style="color:var(--red)">Products API error: ${esc(prodErr)}</div>`});return;}
-  const enriched=products.map(p=>({p,perf:productPerf(p)}));
-  const table=(rows,empty)=>rows.length?`<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Product</th><th class="tr">Stock</th><th class="tr">Orders</th><th class="tr">Spend</th><th>Action</th></tr></thead><tbody>${rows.map(x=>productRow(x.p,x.perf,x.action)).join('')}</tbody></table>`:`<div class="ltd" style="padding:18px;font-size:12px">${empty}</div>`;
-  const boost=enriched.filter(x=>x.p.totalStock>=40).map(x=>({ ...x, action:x.perf.active?{label:'Scale / Boost',tone:'b-a'}:{label:'Launch ad',tone:'b-p'} })).sort((a,b)=>(b.p.totalStock+b.perf.purchases*10)-(a.p.totalStock+a.perf.purchases*10)).slice(0,10);
-  const alerts=enriched.filter(x=>x.p.totalStock<=10||x.p.sizes.some(s=>s.qty<=2)).map(x=>({ ...x, action:x.p.totalStock<=0?{label:'Out of stock',tone:'b-d'}:{label:'Low stock',tone:'b-p'} })).sort((a,b)=>a.p.totalStock-b.p.totalStock).slice(0,10);
-  const dead=enriched.filter(x=>x.p.totalStock>=25&&x.perf.purchases<=1).map(x=>({ ...x, action:{label:'Push offer',tone:'b-p'} })).sort((a,b)=>b.p.totalStock-a.p.totalStock).slice(0,10);
-  document.getElementById('prod-boost-wrap').innerHTML=table(boost,'High stock boost করার মতো product পাওয়া যায়নি।');
-  document.getElementById('prod-alert-wrap').innerHTML=table(alerts,'Low stock alert নেই।');
-  document.getElementById('dead-stock-wrap').innerHTML=table(dead,'Dead stock push list empty.');
+  const enriched=products.map(p=>{const perf=productPerf(p);return{p,perf,decision:productDecision(p,perf)}});
+  const winners=enriched.filter(x=>x.decision.label.includes('Scale')).sort((a,b)=>b.perf.purchases-a.perf.purchases||a.perf.cpp-b.perf.cpp).slice(0,12);
+  const protect=enriched.filter(x=>x.p.totalStock<=10||x.decision.label.includes('Protect')||x.decision.label.includes('stock out')).sort((a,b)=>a.p.totalStock-b.p.totalStock||b.perf.spend-a.perf.spend).slice(0,12);
+  const dead=enriched.filter(x=>x.decision.label.includes('Dead stock')||x.decision.label.includes('Launch test')).sort((a,b)=>b.p.totalStock-a.p.totalStock).slice(0,12);
+  const refresh=enriched.filter(x=>x.decision.label.includes('Creative')||x.decision.label.includes('New creative')).sort((a,b)=>b.perf.spend-a.perf.spend).slice(0,12);
+  const activeProducts=enriched.filter(x=>x.perf.campaigns>0).length;
+  const lowStockActive=enriched.filter(x=>x.perf.active>0&&x.p.totalStock<=10).length;
+  const noPurchaseSpend=enriched.filter(x=>x.perf.spend>=10&&x.perf.purchases===0).length;
+  const topName=winners[0]?.p?.code||winners[0]?.p?.name||'—';
+  const summary=`<div class="pi-grid">
+    <div class="pi-tile"><div class="pi-k">Winning products</div><div class="pi-v">${winners.length}</div><div class="pi-s">Top: ${esc(topName)}</div></div>
+    <div class="pi-tile"><div class="pi-k">Budget protection</div><div class="pi-v">${lowStockActive}</div><div class="pi-s">Active ads with low stock</div></div>
+    <div class="pi-tile"><div class="pi-k">Creative refresh</div><div class="pi-v">${refresh.length}</div><div class="pi-s">High spend / CPP issue</div></div>
+    <div class="pi-tile"><div class="pi-k">Matched products</div><div class="pi-v">${activeProducts}</div><div class="pi-s">Campaign name থেকে product match</div></div>
+  </div>`;
+  const b=document.getElementById('prod-boost-wrap');if(b)b.innerHTML=summary+productTable(winners,'Scale করার মতো winning product পাওয়া যায়নি।');
+  const a=document.getElementById('prod-alert-wrap');if(a)a.innerHTML=productTable(protect,'Stock based budget protection alert নেই।');
+  const d=document.getElementById('dead-stock-wrap');if(d)d.innerHTML=productTable(dead,'High stock / low demand product পাওয়া যায়নি।');
   renderSizeDemand(enriched);
+  renderCreativeRefresh(refresh);
 }
 function renderSizeDemand(enriched){
   const wrap=document.getElementById('size-demand-wrap');if(!wrap)return;
-  const rows=enriched.filter(x=>x.p.sizes.length).sort((a,b)=>b.perf.purchases-a.perf.purchases||b.p.totalStock-a.p.totalStock).slice(0,8);
-  if(!rows.length){wrap.innerHTML='<div class="ltd" style="padding:18px;font-size:12px">Size stock data পাওয়া যায়নি।</div>';return;}
+  const rows=enriched.filter(x=>x.p.sizes.length).sort((a,b)=>b.perf.purchases-a.perf.purchases||b.p.totalStock-a.p.totalStock).slice(0,12);
+  if(!rows.length){wrap.innerHTML='<div class="ltd" style="padding:18px;font-size:12px">Size stock data পাওয়া যায়নি। API response এ size/details না থাকলে এই report empty থাকবে।</div>';return;}
   wrap.innerHTML=rows.map(x=>{
     const max=Math.max(...x.p.sizes.map(s=>s.qty),1);
-    return`<div style="padding:10px 12px;border-bottom:1px solid var(--br)"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:7px"><div style="font-weight:600;font-size:12px;white-space:normal">${esc(x.p.name)}</div><div style="font-size:11px;color:var(--txm);white-space:nowrap">Orders: <b>${x.perf.purchases||0}</b></div></div>${x.p.sizes.map(s=>`<div class="brow" style="grid-template-columns:55px 1fr 42px;margin-bottom:4px"><div class="bn" style="text-align:left">${esc(s.name)}</div><div class="bt"><div class="bf" style="width:${Math.max(4,Math.round(s.qty/max*100))}%"></div></div><div class="bv">${s.qty}</div></div>`).join('')}</div>`;
+    const demand=x.perf.purchases>=5?'High demand':x.perf.purchases>=1?'Demand':'No demand';
+    return`<div style="padding:12px 14px;border-bottom:1px solid var(--br)">
+      <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:9px;align-items:center"><div>${productMini(x.p)}</div><div style="font-size:11px;color:var(--txm);white-space:nowrap">Orders: <b>${x.perf.purchases||0}</b><br>CPP: <b>${x.perf.cpp?mn(x.perf.cpp):'—'}</b></div></div>
+      ${x.p.sizes.map(s=>{const pct=Math.max(4,Math.round(s.qty/max*100));const tag=s.qty<=2?'Re-stock':(x.perf.purchases>=3&&s.qty<=5?'Risk':'OK');const low=s.qty<=2?'low':'ok';return`<div class="demand-grid"><div class="bn" style="text-align:left">${esc(s.name)}</div><div class="bt"><div class="bf" style="width:${pct}%"></div></div><div class="bv ${stockClass(s.qty)}">${s.qty}</div><div class="demand-tag ${low}">${tag}</div></div>`}).join('')}
+      <div style="font-size:10px;color:var(--txh);margin-top:6px">${demand} · ${esc(x.decision.reason)}</div>
+    </div>`;
   }).join('');
+}
+function renderCreativeRefresh(rows){
+  const wrap=document.getElementById('creative-refresh-wrap');
+  if(!wrap)return;
+  wrap.innerHTML=productTable(rows,'Creative refresh alert নেই।');
 }
 async function renderBestTimeDay(){
   const wrap=document.getElementById('best-time-wrap');if(!wrap)return;

@@ -159,26 +159,324 @@ function renderCreativeRefresh(rows){
     if(wrap)wrap.innerHTML=productTable(rows,'Creative refresh alert নেই।');
   });
 }
-async function renderBestTimeDay(){
-  const wrap=document.getElementById('best-time-wrap');if(!wrap)return;
-  if(!accounts.length){wrap.innerHTML='<div class="ltd">No data</div>';return}
-  const key=range+'|'+customStart+'|'+customEnd+'|'+accounts.map(a=>a.id).join(',');
-  if(timeReportCacheKey===key&&timeReportCache){drawBestTimeDay(timeReportCache);return;}
-  wrap.innerHTML='<div class="ltd"><div class="spin"></div>Analysing best time/day…</div>';
-  const hours={},days={};const dp=dpParams();
-  for(const acct of accounts.slice(0,5)){
-    try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'actions',breakdowns:'hourly_stats_aggregated_by_advertiser_time_zone',level:'account',limit:300,...dp});(r.data||[]).forEach(d=>{const h=pi(d.hourly_stats_aggregated_by_advertiser_time_zone);const p=fA(d.actions);hours[h]=(hours[h]||0)+(p?pi(p.value):0);});}catch(e){}
-    try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'actions',time_increment:'1',level:'account',limit:300,...dp});(r.data||[]).forEach(d=>{const day=new Date(d.date_start).toLocaleDateString('en-US',{weekday:'short'});const p=fA(d.actions);days[day]=(days[day]||0)+(p?pi(p.value):0);});}catch(e){}
+async function renderBestTimeDay() {
+  const wrap = document.getElementById(
+    'best-time-wrap'
+  );
+
+  if (!wrap) return;
+
+  const selectedAccounts =
+    typeof getAnalyticsAccounts === 'function'
+      ? getAnalyticsAccounts()
+      : accounts;
+
+  if (!selectedAccounts.length) {
+    wrap.innerHTML =
+      '<div class="ltd">No data</div>';
+
+    return;
   }
-  timeReportCache={hours,days};timeReportCacheKey=key;drawBestTimeDay(timeReportCache);
+
+  const metric =
+    document.getElementById('best-time-metric')?.value ||
+    'purchases';
+
+  const cacheKey =
+    range +
+    '|' +
+    customStart +
+    '|' +
+    customEnd +
+    '|' +
+    metric +
+    '|' +
+    selectedAccounts.map(account => account.id).join(',');
+
+  if (
+    timeReportCacheKey === cacheKey &&
+    timeReportCache
+  ) {
+    drawBestTimeDay(timeReportCache);
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="ltd">
+      <div class="spin"></div>
+      Analysing best time/day…
+    </div>
+  `;
+
+  const hours = {};
+  const days = {};
+  const requestParams = dpParams();
+
+  function addData(target, key, row, account) {
+    if (!target[key]) {
+      target[key] = {
+        spend: 0,
+        purchases: 0,
+        revenue: 0
+      };
+    }
+
+    const spend = toUSD(
+      row.spend,
+      account.originalCurrency
+    );
+
+    const purchaseAction = fA(row.actions);
+
+    const roas = row.purchase_roas
+      ? pf(row.purchase_roas[0]?.value)
+      : 0;
+
+    target[key].spend += spend;
+
+    target[key].purchases += purchaseAction
+      ? pi(purchaseAction.value)
+      : 0;
+
+    target[key].revenue += spend * roas;
+  }
+
+  for (const account of selectedAccounts.slice(0, 10)) {
+    try {
+      const hourlyResponse = await apiFetch(
+        '/' + account.id + '/insights',
+        {
+          fields: 'spend,actions,purchase_roas',
+          breakdowns:
+            'hourly_stats_aggregated_by_advertiser_time_zone',
+          level: 'account',
+          limit: 500,
+          ...requestParams
+        }
+      );
+
+      (hourlyResponse.data || []).forEach(row => {
+        const hour = pi(
+          row.hourly_stats_aggregated_by_advertiser_time_zone
+        );
+
+        addData(hours, hour, row, account);
+      });
+    } catch (error) {
+      console.error(
+        'Best hour fetch failed:',
+        account.name,
+        error
+      );
+    }
+
+    try {
+      const dailyResponse = await apiFetch(
+        '/' + account.id + '/insights',
+        {
+          fields: 'spend,actions,purchase_roas',
+          time_increment: '1',
+          level: 'account',
+          limit: 500,
+          ...requestParams
+        }
+      );
+
+      (dailyResponse.data || []).forEach(row => {
+        const day = new Date(
+          row.date_start
+        ).toLocaleDateString('en-US', {
+          weekday: 'short'
+        });
+
+        addData(days, day, row, account);
+      });
+    } catch (error) {
+      console.error(
+        'Best day fetch failed:',
+        account.name,
+        error
+      );
+    }
+  }
+
+  timeReportCache = {
+    hours,
+    days,
+    metric
+  };
+
+  timeReportCacheKey = cacheKey;
+
+  drawBestTimeDay(timeReportCache);
 }
-function drawBestTimeDay(data){
-  const wrap=document.getElementById('best-time-wrap');if(!wrap)return;
-  const hrs=Object.entries(data.hours||{}).map(([k,v])=>({label:String(k).padStart(2,'0')+':00',val:v})).sort((a,b)=>b.val-a.val).slice(0,5);
-  const dys=Object.entries(data.days||{}).map(([k,v])=>({label:k,val:v})).sort((a,b)=>b.val-a.val).slice(0,5);
-  const bestH=hrs[0],bestD=dys[0];
-  const card=(title,best,rows)=>`<div class="compare-mini"><div class="k">${title}</div><div class="v">${best?esc(best.label):'—'}</div><div class="sub">${best?best.val+' purchases':'No purchase data'}</div>${rows.map(r=>`<div class="brow" style="grid-template-columns:60px 1fr 36px;margin-top:7px;margin-bottom:0"><div class="bn" style="text-align:left">${esc(r.label)}</div><div class="bt"><div class="bf" style="width:${Math.max(4,Math.round(r.val/Math.max(best?.val||1,1)*100))}%"></div></div><div class="bv">${r.val}</div></div>`).join('')}</div>`;
-  wrap.innerHTML=`<div class="compare-grid">${card('Best Hour',bestH,hrs)}${card('Best Day',bestD,dys)}</div><div style="font-size:11px;color:var(--txm);margin-top:10px">Suggestion: winning hour/day অনুযায়ী creative refresh, budget push বা live monitoring করুন।</div>`;
+
+function drawBestTimeDay(data) {
+  const wrap = document.getElementById(
+    'best-time-wrap'
+  );
+
+  if (!wrap) return;
+
+  const metric = data.metric || 'purchases';
+
+  function makeRows(source, isHour) {
+    return Object.entries(source || {})
+      .map(([key, bucket]) => {
+        return {
+          label: isHour
+            ? String(key).padStart(2, '0') + ':00'
+            : key,
+
+          value: analyticsMetricValue(
+            bucket,
+            metric
+          ),
+
+          bucket
+        };
+      })
+      .filter(row => {
+        if (metric === 'cpp') {
+          return row.bucket.purchases > 0;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (metric === 'cpp') {
+          return a.value - b.value;
+        }
+
+        return b.value - a.value;
+      })
+      .slice(0, 5);
+  }
+
+  const hourRows = makeRows(
+    data.hours,
+    true
+  );
+
+  const dayRows = makeRows(
+    data.days,
+    false
+  );
+
+  const bestHour = hourRows[0];
+  const bestDay = dayRows[0];
+
+  const maximumValue = Math.max(
+    ...hourRows.map(row => row.value),
+    ...dayRows.map(row => row.value),
+    1
+  );
+
+  function barWidth(value) {
+    if (metric === 'cpp') {
+      return Math.max(
+        4,
+        Math.round(
+          (1 - value / maximumValue) * 100
+        )
+      );
+    }
+
+    return Math.max(
+      4,
+      Math.round(
+        (value / maximumValue) * 100
+      )
+    );
+  }
+
+  function buildCard(title, best, rows) {
+    return `
+      <div class="compare-mini">
+        <div class="k">${title}</div>
+
+        <div class="v">
+          ${best ? esc(best.label) : '—'}
+        </div>
+
+        <div class="sub">
+          ${
+            best
+              ? analyticsMetricLabel(metric) +
+                ': ' +
+                analyticsMetricFormat(
+                  best.value,
+                  metric
+                )
+              : 'No data'
+          }
+        </div>
+
+        ${rows
+          .map(row => {
+            return `
+              <div
+                class="brow"
+                style="grid-template-columns:60px 1fr 58px;margin-top:7px;margin-bottom:0"
+              >
+                <div
+                  class="bn"
+                  style="text-align:left"
+                >
+                  ${esc(row.label)}
+                </div>
+
+                <div class="bt">
+                  <div
+                    class="bf"
+                    style="width:${barWidth(
+                      row.value
+                    )}%"
+                  ></div>
+                </div>
+
+                <div class="bv">
+                  ${analyticsMetricFormat(
+                    row.value,
+                    metric
+                  )}
+                </div>
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+    `;
+  }
+
+  wrap.innerHTML = `
+    <div class="compare-grid">
+      ${buildCard(
+        'Best Hour',
+        bestHour,
+        hourRows
+      )}
+
+      ${buildCard(
+        'Best Day',
+        bestDay,
+        dayRows
+      )}
+    </div>
+
+    <div
+      style="font-size:11px;color:var(--txm);margin-top:10px"
+    >
+      Selected metric:
+      ${analyticsMetricLabel(metric)}
+      ·
+      ${
+        metric === 'cpp'
+          ? 'Lower is better'
+          : 'Higher is better'
+      }
+    </div>
+  `;
 }
 function renderProductCopyBox(){
   const sel=document.getElementById('prod-copy-select');if(!sel)return;

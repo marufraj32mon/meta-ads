@@ -1,55 +1,724 @@
 // ═══════════════════════════════════════
 // ANALYTICS
 // ═══════════════════════════════════════
+
+function populateAnalyticsAccountFilter() {
+  const select = document.getElementById(
+    'analytics-account-filter'
+  );
+
+  if (!select) return;
+
+  const current = select.value || 'all';
+
+  select.innerHTML =
+    '<option value="all">All selected accounts</option>' +
+    accounts
+      .map(account => {
+        return `
+          <option value="${account.id}">
+            ${esc(account.name)}
+          </option>
+        `;
+      })
+      .join('');
+
+  select.value = accounts.some(account => account.id === current)
+    ? current
+    : 'all';
+}
+
+function getAnalyticsAccounts() {
+  const selectedId =
+    document.getElementById('analytics-account-filter')?.value ||
+    'all';
+
+  if (selectedId === 'all') {
+    return accounts;
+  }
+
+  return accounts.filter(account => account.id === selectedId);
+}
+
+function onAnalyticsFilterChange() {
+  timeReportCacheKey = '';
+  renderAnalytics();
+}
+
+function analyticsMetricValue(bucket, metric) {
+  if (metric === 'spend') {
+    return bucket.spend || 0;
+  }
+
+  if (metric === 'purchases') {
+    return bucket.purchases || 0;
+  }
+
+  if (metric === 'cpp') {
+    return bucket.purchases
+      ? bucket.spend / bucket.purchases
+      : 0;
+  }
+
+  if (metric === 'roas') {
+    return bucket.spend
+      ? bucket.revenue / bucket.spend
+      : 0;
+  }
+
+  return 0;
+}
+
+function analyticsMetricLabel(metric) {
+  const labels = {
+    spend: 'Spend ($)',
+    purchases: 'Purchases',
+    cpp: 'CPP ($)',
+    roas: 'ROAS'
+  };
+
+  return labels[metric] || metric;
+}
+
+function analyticsMetricFormat(value, metric) {
+  if (metric === 'spend' || metric === 'cpp') {
+    return mn(value);
+  }
+
+  if (metric === 'roas') {
+    return Number(value || 0).toFixed(2) + 'x';
+  }
+
+  return num(value);
+}
+
+function previousPeriodParams() {
+  const current = dpRngDate(range);
+
+  if (!current.s || !current.e) {
+    return null;
+  }
+
+  const totalDays =
+    Math.round((current.e - current.s) / 86400000) + 1;
+
+  const previousEnd = new Date(current.s);
+  previousEnd.setDate(previousEnd.getDate() - 1);
+
+  const previousStart = new Date(previousEnd);
+  previousStart.setDate(
+    previousStart.getDate() - totalDays + 1
+  );
+
+  return {
+    'time_range[since]': dpISO(previousStart),
+    'time_range[until]': dpISO(previousEnd)
+  };
+}
+
+async function fetchTrendBuckets(
+  selectedAccounts,
+  requestParams
+) {
+  const dateMap = {};
+
+  await Promise.all(
+    selectedAccounts.map(async account => {
+      try {
+        const response = await apiFetch(
+          '/' + account.id + '/insights',
+          {
+            fields: 'spend,actions,purchase_roas',
+            time_increment: '1',
+            level: 'account',
+            limit: 500,
+            ...requestParams
+          }
+        );
+
+        (response.data || []).forEach(row => {
+          const date = row.date_start;
+
+          if (!dateMap[date]) {
+            dateMap[date] = {
+              spend: 0,
+              purchases: 0,
+              revenue: 0
+            };
+          }
+
+          const spend = toUSD(
+            row.spend,
+            account.originalCurrency
+          );
+
+          const purchaseAction = fA(row.actions);
+
+          const purchases = purchaseAction
+            ? pi(purchaseAction.value)
+            : 0;
+
+          const roas = row.purchase_roas
+            ? pf(row.purchase_roas[0]?.value)
+            : 0;
+
+          dateMap[date].spend += spend;
+          dateMap[date].purchases += purchases;
+          dateMap[date].revenue += spend * roas;
+        });
+      } catch (error) {
+        console.error(
+          'Trend fetch failed:',
+          account.name,
+          error
+        );
+      }
+    })
+  );
+
+  return Object.entries(dateMap).sort((a, b) =>
+    a[0].localeCompare(b[0])
+  );
+}
+
 function renderAnalytics() {
+  populateAnalyticsAccountFilter();
   renderTrend();
   renderHeatmap();
   renderBestTimeDay();
   renderPerf();
-  renderFunnel();
-  renderProductCodes();
 }
-async function renderTrend(){
-  if(!accounts.length)return;
-  const dp=dpParams();
-  try{
-    const r=await apiFetch('/'+accounts[0].id+'/insights',{fields:'spend,actions',time_increment:'1',level:'account',limit:200,...dp});
-    const rows=(r.data||[]).sort((a,b)=>a.date_start.localeCompare(b.date_start));
-    const lbls=rows.map(r=>new Date(r.date_start).toLocaleDateString('en-US',{month:'short',day:'numeric'}));
-    const spD=rows.map(r=>pf(r.spend));
-    const puD=rows.map(r=>{const p=fA(r.actions);return p?pi(p.value):0});
-    drawTrend(lbls,spD,puD);
-  }catch(e){drawTrend([],[],[])}
+
+async function renderTrend() {
+  const selectedAccounts = getAnalyticsAccounts();
+
+  if (!selectedAccounts.length) return;
+
+  const metric =
+    document.getElementById('trend-metric')?.value ||
+    'spend';
+
+  const comparePrevious =
+    document.getElementById('trend-compare')?.checked ||
+    false;
+
+  const currentRows = await fetchTrendBuckets(
+    selectedAccounts,
+    dpParams()
+  );
+
+  let previousRows = [];
+
+  if (comparePrevious) {
+    previousRows = await fetchTrendBuckets(
+      selectedAccounts,
+      previousPeriodParams() || {}
+    );
+  }
+
+  const labels = currentRows.map(([date]) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric'
+    });
+  });
+
+  const currentData = currentRows.map(([, bucket]) =>
+    analyticsMetricValue(bucket, metric)
+  );
+
+  const previousData = previousRows.map(([, bucket]) =>
+    analyticsMetricValue(bucket, metric)
+  );
+
+  drawTrend(
+    labels,
+    currentData,
+    previousData,
+    metric
+  );
 }
-function drawTrend(lbls,spD,puD){
-  const cv=document.getElementById('trend-cv');if(!cv)return;
-  if(charts.trend){charts.trend.destroy();charts.trend=null}
-  const gc='rgba(124,58,237,.08)',tc=getComputedStyle(document.documentElement).getPropertyValue('--txh').trim()||'#888';
-  charts.trend=new Chart(cv,{type:'line',data:{labels:lbls,datasets:[{label:'Spend ($)',data:spD,borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.1)',fill:true,tension:.4,pointRadius:3,yAxisID:'y'},{label:'Purchases',data:puD,borderColor:'#3ecf8e',backgroundColor:'rgba(62,207,142,.1)',fill:true,tension:.4,pointRadius:3,yAxisID:'y1'}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:tc,font:{size:11}}},tooltip:{backgroundColor:'rgba(20,15,30,.95)',borderColor:'rgba(124,58,237,.2)',borderWidth:1,titleColor:'#f0ebff',bodyColor:'#a89dc0',callbacks:{label:c=>c.dataset.label+': '+(c.datasetIndex===0?'$'+c.parsed.y.toFixed(2):c.parsed.y)}}},scales:{x:{grid:{color:gc},ticks:{color:tc,maxTicksLimit:10,font:{size:10}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>'$'+v},position:'left'},y1:{grid:{display:false},ticks:{color:tc,font:{size:10}},position:'right'}}}});
+
+function drawTrend(
+  labels,
+  currentData,
+  previousData,
+  metric
+) {
+  const canvas = document.getElementById('trend-cv');
+
+  if (!canvas) return;
+
+  if (charts.trend) {
+    charts.trend.destroy();
+    charts.trend = null;
+  }
+
+  const textColor =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--txh')
+      .trim() || '#888';
+
+  const gridColor = 'rgba(124,58,237,.08)';
+
+  const datasets = [
+    {
+      label: 'Current ' + analyticsMetricLabel(metric),
+      data: currentData,
+      borderColor: '#7c3aed',
+      backgroundColor: 'rgba(124,58,237,.1)',
+      fill: true,
+      tension: 0.35,
+      pointRadius: 3
+    }
+  ];
+
+  if (previousData.length) {
+    datasets.push({
+      label: 'Previous period',
+      data: previousData,
+      borderColor: '#9ca3af',
+      backgroundColor: 'transparent',
+      borderDash: [6, 4],
+      tension: 0.35,
+      pointRadius: 2
+    });
+  }
+
+  charts.trend = new Chart(canvas, {
+    type: 'line',
+
+    data: {
+      labels,
+      datasets
+    },
+
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+
+      plugins: {
+        legend: {
+          labels: {
+            color: textColor,
+            font: {
+              size: 11
+            }
+          }
+        },
+
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return (
+                context.dataset.label +
+                ': ' +
+                analyticsMetricFormat(
+                  context.parsed.y,
+                  metric
+                )
+              );
+            }
+          }
+        }
+      },
+
+      scales: {
+        x: {
+          grid: {
+            color: gridColor
+          },
+
+          ticks: {
+            color: textColor,
+            maxTicksLimit: 10
+          }
+        },
+
+        y: {
+          grid: {
+            color: gridColor
+          },
+
+          ticks: {
+            color: textColor,
+
+            callback(value) {
+              return analyticsMetricFormat(
+                value,
+                metric
+              );
+            }
+          }
+        }
+      }
+    }
+  });
 }
-async function renderHeatmap(){
-  const wrap=document.getElementById('hm-wrap');if(!accounts.length){wrap.innerHTML='<div class="ltd">No data</div>';return}
-  const dp=dpParams();let hmap={};
-  try{
-    const r=await apiFetch('/'+accounts[0].id+'/insights',{fields:'actions',breakdowns:'hourly_stats_aggregated_by_advertiser_time_zone',level:'account',limit:300,...dp});
-    (r.data||[]).forEach(d=>{const h=pi(d.hourly_stats_aggregated_by_advertiser_time_zone);const p=fA(d.actions);if(p)hmap[h]=(hmap[h]||0)+pi(p.value)});
-  }catch(e){const tot=accounts.reduce((s,a)=>s+a.purchases,0)||50;[9,10,11,14,15,20,21,22].forEach(h=>hmap[h]=Math.round(tot*.1));[8,12,13,16,18,19].forEach(h=>hmap[h]=Math.round(tot*.04))}
-  const hrs=Array.from({length:24},(_,i)=>i);const mx=Math.max(...hrs.map(h=>hmap[h]||0),1);
-  const gc=v=>{const p=v/mx;if(!p)return'rgba(124,58,237,.06)';if(p<.25)return'rgba(124,58,237,.2)';if(p<.5)return'rgba(124,58,237,.45)';if(p<.75)return'rgba(124,58,237,.7)';return'rgba(124,58,237,.95)'};
-  const cW=Math.max(16,Math.floor((wrap.clientWidth-44)/24));
-  let h=`<div style="margin-left:32px;display:flex;gap:2px;margin-bottom:3px">${hrs.map(h=>`<div style="width:${cW}px;font-size:9px;color:var(--txh);text-align:center;flex-shrink:0">${h}</div>`).join('')}</div>`;
-  h+=`<div style="display:flex;align-items:center;gap:2px"><div style="font-size:9px;color:var(--txh);width:30px;text-align:right">All</div>${hrs.map(hr=>`<div title="${hr}:00 → ${hmap[hr]||0} purchases" style="width:${cW}px;height:28px;border-radius:3px;background:${gc(hmap[hr]||0)};flex-shrink:0"></div>`).join('')}</div>`;
-  h+=`<div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:10px;color:var(--txh)"><span>Low</span>${['0.06','0.2','0.45','0.7','0.95'].map(o=>`<div style="width:12px;height:8px;border-radius:2px;background:rgba(124,58,237,${o})"></div>`).join('')}<span>High</span></div>`;
-  wrap.innerHTML=h;
+
+async function renderHeatmap() {
+  const wrap = document.getElementById('hm-wrap');
+  const selectedAccounts = getAnalyticsAccounts();
+
+  if (!selectedAccounts.length) {
+    wrap.innerHTML = '<div class="ltd">No data</div>';
+    return;
+  }
+
+  const metric =
+    document.getElementById('heatmap-metric')?.value ||
+    'purchases';
+
+  const buckets = {};
+
+  await Promise.all(
+    selectedAccounts.map(async account => {
+      try {
+        const response = await apiFetch(
+          '/' + account.id + '/insights',
+          {
+            fields: 'spend,actions,purchase_roas',
+            breakdowns:
+              'hourly_stats_aggregated_by_advertiser_time_zone',
+            level: 'account',
+            limit: 500,
+            ...dpParams()
+          }
+        );
+
+        (response.data || []).forEach(row => {
+          const hour = pi(
+            row.hourly_stats_aggregated_by_advertiser_time_zone
+          );
+
+          if (!buckets[hour]) {
+            buckets[hour] = {
+              spend: 0,
+              purchases: 0,
+              revenue: 0
+            };
+          }
+
+          const spend = toUSD(
+            row.spend,
+            account.originalCurrency
+          );
+
+          const purchaseAction = fA(row.actions);
+
+          const roas = row.purchase_roas
+            ? pf(row.purchase_roas[0]?.value)
+            : 0;
+
+          buckets[hour].spend += spend;
+
+          buckets[hour].purchases += purchaseAction
+            ? pi(purchaseAction.value)
+            : 0;
+
+          buckets[hour].revenue += spend * roas;
+        });
+      } catch (error) {
+        console.error(
+          'Heatmap fetch failed:',
+          account.name,
+          error
+        );
+      }
+    })
+  );
+
+  const hours = Array.from(
+    { length: 24 },
+    (_, index) => index
+  );
+
+  const values = hours.map(hour =>
+    analyticsMetricValue(
+      buckets[hour] || {},
+      metric
+    )
+  );
+
+  const maximumValue = Math.max(...values, 1);
+
+  function getColor(value) {
+    const percentage = value / maximumValue;
+
+    if (!percentage) {
+      return 'rgba(124,58,237,.06)';
+    }
+
+    if (percentage < 0.25) {
+      return 'rgba(124,58,237,.2)';
+    }
+
+    if (percentage < 0.5) {
+      return 'rgba(124,58,237,.45)';
+    }
+
+    if (percentage < 0.75) {
+      return 'rgba(124,58,237,.7)';
+    }
+
+    return 'rgba(124,58,237,.95)';
+  }
+
+  const cellWidth = Math.max(
+    16,
+    Math.floor((wrap.clientWidth - 44) / 24)
+  );
+
+  wrap.innerHTML = `
+    <div style="margin-left:32px;display:flex;gap:2px;margin-bottom:3px">
+      ${hours
+        .map(hour => {
+          return `
+            <div style="width:${cellWidth}px;font-size:9px;color:var(--txh);text-align:center;flex-shrink:0">
+              ${hour}
+            </div>
+          `;
+        })
+        .join('')}
+    </div>
+
+    <div style="display:flex;align-items:center;gap:2px">
+      <div style="font-size:9px;color:var(--txh);width:30px;text-align:right">
+        All
+      </div>
+
+      ${hours
+        .map((hour, index) => {
+          return `
+            <div
+              title="${hour}:00 → ${analyticsMetricFormat(
+                values[index],
+                metric
+              )}"
+              style="width:${cellWidth}px;height:28px;border-radius:3px;background:${getColor(
+                values[index]
+              )};flex-shrink:0"
+            ></div>
+          `;
+        })
+        .join('')}
+    </div>
+
+    <div style="margin-top:8px;font-size:10px;color:var(--txh)">
+      Metric: ${analyticsMetricLabel(metric)}
+      · Darker = higher
+    </div>
+  `;
 }
-function renderPerf(){
-  const cv=document.getElementById('perf-cv');if(!cv)return;
-  if(charts.perf){charts.perf.destroy();charts.perf=null}
-  const cs=campaigns.filter(c=>c.spend>0).sort((a,b)=>b.spend-a.spend).slice(0,15);if(!cs.length)return;
-  const maxCPP=pf(document.getElementById('tc')?.value)||5;const minROAS=pf(document.getElementById('troas')?.value)||2;
-  const gc='rgba(124,58,237,.08)',tc=getComputedStyle(document.documentElement).getPropertyValue('--txh').trim()||'#888';
-  const bg=cs.map(c=>{if(!c.purchases)return'rgba(139,139,136,.4)';if(c.cpp<=maxCPP&&c.roas>=minROAS)return'rgba(62,207,142,.75)';return'rgba(247,85,85,.75)'});
-  charts.perf=new Chart(cv,{type:'bar',data:{labels:cs.map(c=>c.name.length>22?c.name.slice(0,22)+'…':c.name),datasets:[{label:'Spend',data:cs.map(c=>c.spend),backgroundColor:bg,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(20,15,30,.95)',borderColor:'rgba(124,58,237,.2)',borderWidth:1,titleColor:'#f0ebff',bodyColor:'#a89dc0',callbacks:{label:ctx=>{const c=cs[ctx.dataIndex];return[`Spend: ${mn(c.spend)}`,`Purchases: ${c.purchases||'—'}`,`CPP: ${c.cpp?mn(c.cpp):'—'}`,`ROAS: ${c.roas?c.roas.toFixed(2)+'x':'—'}`]}}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:10},maxRotation:35}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>'$'+v}}}}});
+
+function renderPerf() {
+  const canvas = document.getElementById('perf-cv');
+
+  if (!canvas) return;
+
+  if (charts.perf) {
+    charts.perf.destroy();
+    charts.perf = null;
+  }
+
+  const selectedAccountIds = new Set(
+    getAnalyticsAccounts().map(account => account.id)
+  );
+
+  const search =
+    (
+      document.getElementById('perf-search')?.value ||
+      ''
+    ).toLowerCase();
+
+  const status =
+    document.getElementById('perf-status')?.value ||
+    '';
+
+  const minimumSpend = pf(
+    document.getElementById('perf-min-spend')?.value
+  );
+
+  const filteredCampaigns = campaigns
+    .filter(campaign => {
+      if (!selectedAccountIds.has(campaign.accountId)) {
+        return false;
+      }
+
+      if (campaign.spend < minimumSpend) {
+        return false;
+      }
+
+      if (status && campaign.status !== status) {
+        return false;
+      }
+
+      if (
+        search &&
+        !campaign.name.toLowerCase().includes(search)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 100);
+
+  if (!filteredCampaigns.length) return;
+
+  const maxCPP =
+    pf(document.getElementById('tc')?.value) || 5;
+
+  const minROAS =
+    pf(document.getElementById('troas')?.value) || 2;
+
+  const maximumSpend = Math.max(
+    ...filteredCampaigns.map(campaign => campaign.spend),
+    1
+  );
+
+  const points = filteredCampaigns.map(campaign => {
+    return {
+      x: campaign.cpp || 0,
+      y: campaign.roas || 0,
+
+      r: Math.max(
+        4,
+        Math.min(
+          18,
+          4 +
+            Math.sqrt(
+              campaign.spend / maximumSpend
+            ) *
+              14
+        )
+      ),
+
+      campaign
+    };
+  });
+
+  const colors = filteredCampaigns.map(campaign => {
+    if (!campaign.purchases) {
+      return 'rgba(139,139,136,.55)';
+    }
+
+    if (
+      campaign.cpp <= maxCPP &&
+      campaign.roas >= minROAS
+    ) {
+      return 'rgba(62,207,142,.78)';
+    }
+
+    return 'rgba(247,85,85,.75)';
+  });
+
+  const textColor =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--txh')
+      .trim() || '#888';
+
+  const gridColor = 'rgba(124,58,237,.08)';
+
+  charts.perf = new Chart(canvas, {
+    type: 'bubble',
+
+    data: {
+      datasets: [
+        {
+          label: 'Campaigns',
+          data: points,
+          backgroundColor: colors,
+          borderColor: colors
+        }
+      ]
+    },
+
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      plugins: {
+        legend: {
+          display: false
+        },
+
+        tooltip: {
+          callbacks: {
+            label(context) {
+              const campaign =
+                context.raw.campaign;
+
+              return [
+                campaign.name,
+                `Account: ${campaign.accountName}`,
+                `Spend: ${mn(campaign.spend)}`,
+                `Purchases: ${campaign.purchases || 0}`,
+                `CPP: ${
+                  campaign.cpp
+                    ? mn(campaign.cpp)
+                    : '—'
+                }`,
+                `ROAS: ${
+                  campaign.roas
+                    ? campaign.roas.toFixed(2) + 'x'
+                    : '—'
+                }`
+              ];
+            }
+          }
+        }
+      },
+
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: 'CPP ($) — lower is better',
+            color: textColor
+          },
+
+          grid: {
+            color: gridColor
+          },
+
+          ticks: {
+            color: textColor,
+
+            callback(value) {
+              return '$' + value;
+            }
+          }
+        },
+
+        y: {
+          title: {
+            display: true,
+            text: 'ROAS — higher is better',
+            color: textColor
+          },
+
+          grid: {
+            color: gridColor
+          },
+
+          ticks: {
+            color: textColor,
+
+            callback(value) {
+              return value + 'x';
+            }
+          }
+        }
+      }
+    }
+  });
 }
 function renderFunnel(){
   const wrap=document.getElementById('funnel-wrap');if(!wrap)return;

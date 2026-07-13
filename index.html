@@ -398,6 +398,11 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
 .demand-grid{display:grid;grid-template-columns:72px 1fr 48px 88px;align-items:center;gap:8px;margin-bottom:6px}
 .demand-tag{font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;text-align:center;background:var(--sf3);color:var(--txm)}
 .demand-tag.low{background:var(--rbg);color:var(--rtx)}.demand-tag.ok{background:var(--gbg);color:var(--gtx)}
+.stock-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--br);background:var(--sf2)}
+.stock-tabs{display:flex;gap:5px;flex-wrap:wrap}.stock-search{min-width:240px;flex:1;max-width:380px}
+.stock-danger{color:var(--red)!important;font-weight:800}.stock-safe{color:var(--green);font-weight:800}
+.stock-sizes{display:flex;gap:4px;flex-wrap:wrap}.stock-size{font-size:10px;padding:2px 6px;border-radius:99px;background:var(--sf3);color:var(--txm)}
+.stock-size.low{background:var(--rbg);color:var(--rtx)}.stock-more{display:flex;justify-content:center;padding:14px;border-top:1px solid var(--br)}
 .campaign-all-note{font-size:11px;color:var(--txm);padding:9px 14px;border-top:1px solid var(--br);background:var(--sf2)}
 .dp-ft .btn-pri[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
 @media(max-width:760px){.dp-pnl{min-width:calc(100vw - 16px);left:8px!important;right:8px;flex-direction:column}.dp-pre{width:100%;display:flex;overflow-x:auto;border-right:0;border-bottom:1px solid var(--br)}.dp-pre-t{display:none}.dp-pi{min-width:max-content;border-left:0;border-bottom:2px solid transparent}.dp-pi.on{border-bottom-color:var(--pri)}.dp-cals{flex-direction:column}.dp-cal+.dp-cal{margin-left:0;margin-top:14px;padding-left:0;padding-top:14px;border-left:0;border-top:1px solid var(--br)}}
@@ -815,8 +820,17 @@ tr.bad:hover td{background:rgba(220,38,38,.08)}
           <div class="tw" id="product-winning-wrap"><div class="ltd">Loading…</div></div>
         </div>
         <div class="card">
-          <div class="ch"><div class="ct"><div class="ct-icon">🛡️</div>Stock Based Budget Protection</div><span class="csub">Low stock / stock out warning</span></div>
-          <div class="tw" id="product-stock-protection-wrap"><div class="ltd">Loading…</div></div>
+          <div class="ch"><div class="ct"><div class="ct-icon">📦</div>Live Product Stock</div><span class="csub">API stock · 30-এর নিচে red alert</span></div>
+          <div class="stock-toolbar">
+            <div class="stock-tabs">
+              <button class="tab-pill on" id="stock-tab-all" onclick="setStockCategory('all',this)">All</button>
+              <button class="tab-pill" id="stock-tab-summer" onclick="setStockCategory('summer',this)">Summer</button>
+              <button class="tab-pill" id="stock-tab-winter" onclick="setStockCategory('winter',this)">Winter</button>
+              <button class="tab-pill" id="stock-tab-womens" onclick="setStockCategory('womens',this)">Womens</button>
+            </div>
+            <input class="stock-search" id="stock-search" placeholder="Product code search…" oninput="resetStockList()">
+          </div>
+          <div class="tw" id="stock-list-wrap"><div class="ltd">Loading stock…</div></div>
         </div>
       </div>
 
@@ -942,6 +956,8 @@ const TK='mads_tk6',RG='mads_rg6',GK='mads_gem';
 const API='https://graph.facebook.com/v19.0';
 const GEM_URL='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 const PROD_API='https://sells.alzeena.com.bd/public/api/products';
+const BDT_USD_RATE=129;
+const STOCK_CATEGORY_IDS={summer:[6,7,9,10,11,17,24,44],winter:[14,15,22,26,44,34,13],womens:[1,2,3,5,34,42]};
 const COLS=['#7c3aed','#a855f7','#3ecf8e','#f5a623','#f75555','#2dd4bf','#fb923c','#e879f9','#34d399','#60a5fa','#f472b6','#fbbf24'];
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const WDAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -951,6 +967,7 @@ let range=localStorage.getItem(RG)||'today';
 let rangeLbl='Today';
 let curView='accounts',audTab='age';
 let selIds=new Set();
+let accountSelectionInitialized=false;
 let accounts=[],campaigns=[],audData={},rawAccounts=[];
 let products=[],prodErr='',prodLoaded=false,timeReportCacheKey='',timeReportCache=null;
 let aSort={f:'spend',d:-1},cSort={f:'spend',d:-1};
@@ -971,6 +988,7 @@ let autoRefreshMs=parseInt(localStorage.getItem('mads_auto_refresh')||'0');
 let autoRefreshTimer=null;
 let campQuickFilter='all';
 let badDayCfg={enabled:false,spend:10,autoPause:false};
+let stockCategory='all',stockVisible=20;
 
 // ═══════════════════════════════════════
 // BOOT
@@ -1052,6 +1070,7 @@ function switchView(v){
   if(v==='ai')loadAdPreviews();
   else if(v==='creatives'){renderFreqList();detectWin();renderProductCopyBox();}
   else renderView();
+  if(v==='products')renderStockList();
 }
 function renderView(){
   if(curView==='accounts')renderAcct();
@@ -1169,7 +1188,7 @@ function dpRenderOne(id,y,m,isL){
       if(iso>lo&&iso<hi)cls+=' inr';
       if(iso===hovISO)cls+=(sISO<hovISO?' se':' ss');
     }
-    h+=`<div class="${cls}" data-iso="${iso}">${d}</div>`;
+    h+=`<div class="${cls}" data-iso="${iso}" onclick="dpDC('${iso}')" onmouseenter="dpDH('${iso}')">${d}</div>`;
   }
   h+=`</div>`;
   el.innerHTML=h;
@@ -1205,21 +1224,6 @@ function dpUpdateApplyState(){
   btn.disabled=dpCust&&(!dpS||!dpE)&&!dpPend;
 }
 
-// Robust date click handler: fixes calendar day selection even when inline click is blocked by overlay/layer issues.
-document.addEventListener('click',function(e){
-  const day=e.target.closest&&e.target.closest('.dp-day[data-iso]');
-  if(!day||!document.getElementById('dp-ov')?.classList.contains('open'))return;
-  e.preventDefault();
-  e.stopPropagation();
-  if(e.stopImmediatePropagation)e.stopImmediatePropagation();
-  dpDC(day.dataset.iso);
-},true);
-document.addEventListener('mouseover',function(e){
-  const day=e.target.closest&&e.target.closest('.dp-day[data-iso]');
-  if(!day||!document.getElementById('dp-ov')?.classList.contains('open'))return;
-  dpDH(day.dataset.iso);
-},true);
-
 // ═══════════════════════════════════════
 // API
 // ═══════════════════════════════════════
@@ -1238,6 +1242,9 @@ function dpParams(){
 function pf(v){return parseFloat(v)||0}
 function pi(v){return parseInt(v)||0}
 function fA(arr){if(!arr)return null;return arr.find(a=>a.action_type==='purchase'||a.action_type==='omni_purchase')||null}
+function currencyRate(currency){return String(currency||'USD').toUpperCase()==='BDT'?BDT_USD_RATE:1}
+function toUSD(value,currency){return pf(value)/currencyRate(currency)}
+function fromUSD(value,currency){return pf(value)*currencyRate(currency)}
 
 // ═══════════════════════════════════════
 // LOAD DATA
@@ -1249,6 +1256,7 @@ async function loadAll(){
     const res=await apiFetch('/me/adaccounts',{fields:'id,name,account_status,currency,business',limit:100});
     rawAccounts=res.data||[];
     if(!rawAccounts.length){setErr('No accounts found.');return}
+    if(!accountSelectionInitialized){rawAccounts.filter(a=>a.account_status===1).forEach(a=>selIds.add(a.id));accountSelectionInitialized=true;}
     buildChips(rawAccounts);
     await loadSel(rawAccounts);
   }catch(e){setErr('API Error: '+e.message)}
@@ -1276,30 +1284,32 @@ async function loadSel(raw){
 }
 function refreshAll(){loadSel()}
 async function fetchOne(acct){
-  const base={id:acct.id,name:acct.name||acct.id,biz:acct.business?.name||'—',currency:acct.currency||'USD',account_status:acct.account_status};
+  const originalCurrency=String(acct.currency||'USD').toUpperCase();
+  const base={id:acct.id,name:acct.name||acct.id,biz:acct.business?.name||'—',currency:'USD',originalCurrency,normalizedFromBDT:originalCurrency==='BDT',account_status:acct.account_status};
   let ins={spend:0,impressions:0,reach:0,clicks:0,ctr:0,purchases:0,cpp:0,roas:0};
   let active_campaigns=0,totalDailyBudget=0,camps=[],aud={age:[],placement:[],region:[]};
   const dp=dpParams();
   try{
     const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,impressions,reach,clicks,ctr,purchase_roas,actions,cost_per_action_type',level:'account',...dp});
     if(r.data?.[0]){const d=r.data[0];const pa=fA(d.actions);const ca=fA(d.cost_per_action_type);
-      ins={spend:pf(d.spend),impressions:pi(d.impressions),reach:pi(d.reach),clicks:pi(d.clicks),ctr:pf(d.ctr),purchases:pa?pi(pa.value):0,cpp:ca?pf(ca.value):0,roas:d.purchase_roas?pf(d.purchase_roas[0]?.value):0};}
+      ins={spend:toUSD(d.spend,originalCurrency),impressions:pi(d.impressions),reach:pi(d.reach),clicks:pi(d.clicks),ctr:pf(d.ctr),purchases:pa?pi(pa.value):0,cpp:toUSD(ca?.value,originalCurrency),roas:d.purchase_roas?pf(d.purchase_roas[0]?.value):0};}
   }catch(e){}
   try{
     const r=await apiFetch('/'+acct.id+'/campaigns',{fields:'id,name,status,daily_budget,lifetime_budget',effective_status:'["ACTIVE","PAUSED"]',limit:200});
     const rawC=r.data||[];
     active_campaigns=rawC.filter(c=>c.status==='ACTIVE').length;
-    totalDailyBudget=rawC.reduce((s,c)=>s+pi(c.daily_budget)/100,0);
+    totalDailyBudget=rawC.reduce((s,c)=>s+toUSD(pi(c.daily_budget)/100,originalCurrency),0);
     if(rawC.length){
       const ir=await apiFetch('/'+acct.id+'/insights',{fields:'campaign_id,spend,impressions,reach,clicks,ctr,purchase_roas,actions,cost_per_action_type',level:'campaign',limit:500,...dp});
       const imap={};(ir.data||[]).forEach(d=>imap[d.campaign_id||d.id]=d);
       camps=rawC.map(c=>{const d=imap[c.id]||{};const pa=fA(d.actions);const ca=fA(d.cost_per_action_type);
-        return{id:c.id,name:c.name,accountId:acct.id,accountName:base.name,currency:base.currency,status:c.status,daily_budget:c.daily_budget?pi(c.daily_budget)/100:null,lifetime_budget:c.lifetime_budget?pi(c.lifetime_budget)/100:null,spend:pf(d.spend),impressions:pi(d.impressions),reach:pi(d.reach),clicks:pi(d.clicks),ctr:pf(d.ctr),purchases:pa?pi(pa.value):0,cpp:ca?pf(ca.value):0,roas:d.purchase_roas?pf(d.purchase_roas[0]?.value):0};});
+        return{id:c.id,name:c.name,accountId:acct.id,accountName:base.name,currency:'USD',originalCurrency,status:c.status,daily_budget:c.daily_budget?toUSD(pi(c.daily_budget)/100,originalCurrency):null,lifetime_budget:c.lifetime_budget?toUSD(pi(c.lifetime_budget)/100,originalCurrency):null,spend:toUSD(d.spend,originalCurrency),impressions:pi(d.impressions),reach:pi(d.reach),clicks:pi(d.clicks),ctr:pf(d.ctr),purchases:pa?pi(pa.value):0,cpp:toUSD(ca?.value,originalCurrency),roas:d.purchase_roas?pf(d.purchase_roas[0]?.value):0};});
     }
   }catch(e){}
-  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,actions,impressions',breakdowns:'age,gender',level:'account',limit:100,...dp});aud.age=r.data||[];}catch(e){}
-  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,impressions,actions',breakdowns:'publisher_platform,platform_position',level:'account',limit:100,...dp});aud.placement=r.data||[];}catch(e){}
-  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,actions',breakdowns:'region',level:'account',limit:30,...dp});aud.region=r.data||[];}catch(e){}
+  const normalizeBreakdown=rows=>(rows||[]).map(r=>({...r,spend:toUSD(r.spend,originalCurrency)}));
+  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,actions,impressions',breakdowns:'age,gender',level:'account',limit:100,...dp});aud.age=normalizeBreakdown(r.data);}catch(e){}
+  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,impressions,actions',breakdowns:'publisher_platform,platform_position',level:'account',limit:100,...dp});aud.placement=normalizeBreakdown(r.data);}catch(e){}
+  try{const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,reach,actions',breakdowns:'region',level:'account',limit:30,...dp});aud.region=normalizeBreakdown(r.data);}catch(e){}
   return{acct:{...base,...ins,active_campaigns,totalDailyBudget},camps,aud};
 }
 async function fetchYesterdaySummary(list){
@@ -1309,7 +1319,7 @@ async function fetchYesterdaySummary(list){
       const r=await apiFetch('/'+acct.id+'/insights',{fields:'spend,purchase_roas,actions',level:'account',date_preset:'yesterday'});
       const d=r.data?.[0];
       if(!d)return;
-      const sVal=pf(d.spend);
+      const sVal=toUSD(d.spend,acct.currency);
       const pa=fA(d.actions);
       spend+=sVal;
       purchases+=pa?pi(pa.value):0;
@@ -1324,15 +1334,14 @@ async function fetchYesterdaySummary(list){
 // CHIPS
 // ═══════════════════════════════════════
 function buildChips(raw){
-  if(selIds.size===0)raw.forEach(a=>{if(a.account_status===1)selIds.add(a.id)});
   document.getElementById('chips').innerHTML=raw.map(a=>{
     const ok=a.account_status===1,on=selIds.has(a.id);
     return`<div class="chip ${on?'on':''} ${!ok?'dead':''}" id="chip-${a.id}" onclick="togChip('${a.id}')" title="${ok?'Active':'Disabled'} · ${a.id}"><span class="cdot" style="${!ok?'background:var(--red)':''}"></span>${esc(a.name||a.id)}</div>`;
   }).join('');
 }
-function togChip(id){selIds.has(id)?selIds.delete(id):selIds.add(id);document.getElementById('chip-'+id)?.classList.toggle('on',selIds.has(id));loadSel()}
-function selAll(){rawAccounts.forEach(a=>{if(a.account_status===1)selIds.add(a.id)});buildChips(rawAccounts);loadSel()}
-function clrAll(){selIds.clear();buildChips(rawAccounts);loadSel()}
+function togChip(id){accountSelectionInitialized=true;selIds.has(id)?selIds.delete(id):selIds.add(id);document.getElementById('chip-'+id)?.classList.toggle('on',selIds.has(id));loadSel()}
+function selAll(){accountSelectionInitialized=true;selIds=new Set(rawAccounts.map(a=>a.id));buildChips(rawAccounts);loadSel(rawAccounts)}
+function clrAll(){accountSelectionInitialized=true;selIds.clear();buildChips(rawAccounts);loadSel(rawAccounts)}
 
 // ═══════════════════════════════════════
 // METRICS
@@ -1621,7 +1630,8 @@ async function applyBudget(){
   const newB=pf(document.getElementById('budget-slider').value);
   const c=campaigns.find(x=>x.id===budgetTargetId);if(!c)return;
   try{
-    const res=await fetch(`${API}/${budgetTargetId}?access_token=${token}`,{method:'POST',body:new URLSearchParams({daily_budget:Math.round(newB*100)}),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+    const nativeBudget=fromUSD(newB,c.originalCurrency);
+    const res=await fetch(`${API}/${budgetTargetId}?access_token=${token}`,{method:'POST',body:new URLSearchParams({daily_budget:Math.round(nativeBudget*100)}),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
     const d=await res.json();if(d.error){showToast('Budget update failed','d',d.error.message);return}
     c.daily_budget=newB;showToast('✓ Budget updated','i',`${esc(c.name)} → ${mn(newB)}/day`);closeModal('budget-modal');renderCamp();
   }catch(e){showToast('Error','d',e.message)}
@@ -1631,7 +1641,8 @@ async function quickBudget(campId,mult){
   const newB=Math.max(1,Math.round(c.daily_budget*mult));
   showToast(`${mult>1?'↑':''} Budget ${mult>1?'+':'-'}20%…`,'i',`${mn(c.daily_budget)} → ${mn(newB)}/day`);
   try{
-    const res=await fetch(`${API}/${campId}?access_token=${token}`,{method:'POST',body:new URLSearchParams({daily_budget:Math.round(newB*100)}),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
+    const nativeBudget=fromUSD(newB,c.originalCurrency);
+    const res=await fetch(`${API}/${campId}?access_token=${token}`,{method:'POST',body:new URLSearchParams({daily_budget:Math.round(nativeBudget*100)}),headers:{'Content-Type':'application/x-www-form-urlencoded'}});
     const d=await res.json();if(d.error){showToast('Failed','d',d.error.message);return}
     c.daily_budget=newB;showToast('✓ Updated','i',`${esc(c.name)}: ${mn(newB)}/day`);renderCamp();
   }catch(e){showToast('Error','d',e.message)}
@@ -1654,9 +1665,11 @@ async function executeClone(){
   const targetAcct=document.getElementById('clone-target-acct').value;
   const newName=document.getElementById('clone-new-name').value.trim()||c.name+' - Copy';
   const newB=pf(document.getElementById('clone-budget').value)||10;
+  const target=accounts.find(a=>a.id===targetAcct);
+  const nativeBudget=fromUSD(newB,target?.originalCurrency);
   const btn=document.getElementById('clone-btn');btn.disabled=true;btn.textContent='⏳ Cloning…';
   try{
-    const res=await fetch(`${API}/${targetAcct}/campaigns?access_token=${token}`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({name:newName,status:'PAUSED',special_ad_categories:'[]',daily_budget:Math.round(newB*100),objective:'OUTCOME_SALES'})});
+    const res=await fetch(`${API}/${targetAcct}/campaigns?access_token=${token}`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({name:newName,status:'PAUSED',special_ad_categories:'[]',daily_budget:Math.round(nativeBudget*100),objective:'OUTCOME_SALES'})});
     const d=await res.json();btn.disabled=false;btn.textContent='Clone';
     if(d.error){showToast('Clone failed','d',d.error.message);return}
     showToast('✓ Cloned!','i',`"${newName}" created as PAUSED`);closeModal('clone-modal');setTimeout(refreshAll,1500);
@@ -1770,7 +1783,7 @@ async function loadProducts(force=false){
   if(prodLoaded&&!force)return products;
   prodErr='';
   try{
-    let r=await fetch('/api/products',{cache:'no-store'});
+    let r=await fetch('/api/product',{cache:'no-store'});
     if(!r.ok)r=await fetch(PROD_API,{cache:'no-store'});
     const data=await r.json();
     const list=Array.isArray(data)?data:(data.data||data.products||[]);
@@ -1788,7 +1801,30 @@ function normalizeProduct(p){
   const img=p.product_image||p.image||p.thumbnail||p.featured_image||'';
   const price=pf(p.discount_price)||pf(p.flash_sell_price)||pf(p.sell_price)||pf(p.price)||0;
   const detailText=typeof p.product_details==='string'?p.product_details:(typeof p.details==='string'?p.details:'');
-  return{raw:p,id:p.id,name:p.product_name||p.name||'',code:p.product_code||p.code||p.sku||'',slug:p.slug||'',details:detailText,image:img,price,sellPrice:pf(p.sell_price)||pf(p.regular_price),discountPrice:pf(p.discount_price),totalStock,sizes,status:p.product_status||p.status};
+  return{raw:p,id:p.id,name:p.product_name||p.name||'',code:p.product_code||p.code||p.sku||'',slug:p.slug||'',details:detailText,image:img,price,sellPrice:pf(p.sell_price)||pf(p.regular_price),discountPrice:pf(p.discount_price),totalStock,sizes,status:p.product_status||p.status,subCategoryId:pi(p.product_sub_category_id??p.sub_category_id)};
+}
+
+function setStockCategory(category,btn){
+  stockCategory=category;stockVisible=20;
+  document.querySelectorAll('.stock-tabs .tab-pill').forEach(b=>b.classList.remove('on'));
+  btn?.classList.add('on');renderStockList();
+}
+function resetStockList(){stockVisible=20;renderStockList()}
+function loadMoreStock(){stockVisible+=20;renderStockList()}
+function stockCategoryMatch(p){return stockCategory==='all'||(STOCK_CATEGORY_IDS[stockCategory]||[]).includes(p.subCategoryId)}
+function renderStockList(){
+  const wrap=document.getElementById('stock-list-wrap');if(!wrap)return;
+  if(!prodLoaded){wrap.innerHTML='<div class="ltd"><div class="spin"></div>Loading stock from API…</div>';loadProducts().then(renderStockList);return;}
+  if(prodErr){wrap.innerHTML=`<div class="ltd" style="color:var(--red)">Products API error: ${esc(prodErr)}</div>`;return;}
+  const q=normKey(document.getElementById('stock-search')?.value||'');
+  const filtered=products.filter(p=>stockCategoryMatch(p)&&(!q||normKey(p.code).includes(q)||normKey(p.name).includes(q))).sort((a,b)=>b.totalStock-a.totalStock||String(a.code).localeCompare(String(b.code)));
+  const visible=filtered.slice(0,stockVisible);
+  const table=visible.length?`<table><thead><tr><th>Product</th><th>Category</th><th>Size-wise stock</th><th class="tr">Total stock</th><th class="tc">Status</th></tr></thead><tbody>${visible.map(p=>{
+    const low=p.totalStock<30;
+    return `<tr style="${low?'background:var(--rbg)':''}"><td>${productMini(p)}</td><td><span class="clbl">ID ${p.subCategoryId||'—'}</span></td><td><div class="stock-sizes">${p.sizes.length?p.sizes.map(z=>`<span class="stock-size ${z.qty<30?'low':''}">${esc(z.name)}: ${z.qty}</span>`).join(''):'—'}</div></td><td class="tr ${low?'stock-danger':'stock-safe'}">${p.totalStock}</td><td class="tc"><span class="action-pill ${low?'action-guard':'action-scale'}">${low?'Below 30':'30+ ready'}</span></td></tr>`;
+  }).join('')}</tbody></table>`:`<div class="ltd" style="padding:22px">এই category/search-এ কোনো product পাওয়া যায়নি।</div>`;
+  const more=filtered.length>visible.length?`<div class="stock-more"><button onclick="loadMoreStock()">Load more (${filtered.length-visible.length} remaining)</button></div>`:'';
+  wrap.innerHTML=table+more+`<div class="campaign-all-note">Showing ${visible.length} of ${filtered.length} products · Highest stock first · Minimum target 30</div>`;
 }
 function normKey(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'')}
 function firstCode(v){return String(v||'').trim().split(/\s+/)[0]||''}
@@ -1836,7 +1872,7 @@ function productTable(rows,empty){
   return rows.length?`<table><thead><tr><th>Product</th><th class="tr">Stock</th><th class="tr">Active/Ads</th><th class="tr">Orders</th><th class="tr">Spend</th><th class="tr">CPP</th><th class="tr">ROAS</th><th>Decision</th></tr></thead><tbody>${rows.map(x=>productRow(x.p,x.perf,x.decision)).join('')}</tbody></table>`:`<div class="ltd" style="padding:18px;font-size:12px">${empty}</div>`;
 }
 function renderProductIntelligence(){
-  const ids=['prod-boost-wrap','prod-alert-wrap','dead-stock-wrap','size-demand-wrap','creative-refresh-wrap','product-report-summary','product-winning-wrap','product-stock-protection-wrap','product-decision-wrap','product-size-demand-wrap','product-creative-refresh-wrap'];
+  const ids=['prod-boost-wrap','prod-alert-wrap','dead-stock-wrap','size-demand-wrap','creative-refresh-wrap','product-report-summary','product-winning-wrap','product-decision-wrap','product-size-demand-wrap','product-creative-refresh-wrap'];
   const hasTargets=ids.some(id=>document.getElementById(id));
   if(!hasTargets)return;
   if(!prodLoaded){
@@ -1854,13 +1890,11 @@ function renderProductIntelligence(){
   const dead=enriched.filter(x=>x.decision.label.includes('Dead stock')||x.decision.label.includes('Launch test')).sort((a,b)=>b.p.totalStock-a.p.totalStock).slice(0,12);
   const refresh=enriched.filter(x=>x.decision.label.includes('Creative')||x.decision.label.includes('New creative')).sort((a,b)=>b.perf.spend-a.perf.spend).slice(0,12);
   const activeProducts=enriched.filter(x=>x.perf.campaigns>0).length;
-  const lowStockActive=enriched.filter(x=>x.perf.active>0&&x.p.totalStock<=10).length;
   const noPurchaseSpend=enriched.filter(x=>x.perf.spend>=10&&x.perf.purchases===0).length;
   const totalStock=enriched.reduce((s,x)=>s+x.p.totalStock,0);
   const topName=winners[0]?.p?.code||winners[0]?.p?.name||'—';
   const summary=`<div class="pi-grid">
     <div class="pi-tile"><div class="pi-k">Winning products</div><div class="pi-v">${winners.length}</div><div class="pi-s">Top: ${esc(topName)}</div></div>
-    <div class="pi-tile"><div class="pi-k">Budget protection</div><div class="pi-v">${lowStockActive}</div><div class="pi-s">Active ads with low stock</div></div>
     <div class="pi-tile"><div class="pi-k">Creative refresh</div><div class="pi-v">${refresh.length}</div><div class="pi-s">High spend / CPP issue</div></div>
     <div class="pi-tile"><div class="pi-k">Matched products</div><div class="pi-v">${activeProducts}</div><div class="pi-s">Campaign name থেকে product match</div></div>
     <div class="pi-tile"><div class="pi-k">Total products</div><div class="pi-v">${products.length}</div><div class="pi-s">API products loaded</div></div>
@@ -1872,7 +1906,6 @@ function renderProductIntelligence(){
 
   const sum=document.getElementById('product-report-summary');if(sum)sum.innerHTML=summary;
   const win=document.getElementById('product-winning-wrap');if(win)win.innerHTML=productTable(winners,'Winning product পাওয়া যায়নি। Campaign name এর সাথে product code match হলে leaderboard দেখাবে।');
-  const prot=document.getElementById('product-stock-protection-wrap');if(prot)prot.innerHTML=productTable(protect,'Low stock / stock out active ads alert নেই।');
   const dec=document.getElementById('product-decision-wrap');if(dec)dec.innerHTML=productTable(enriched.slice(0,30),'Product decision report empty। Products API data পাওয়া যায়নি।');
 
   renderSizeDemand(enriched);

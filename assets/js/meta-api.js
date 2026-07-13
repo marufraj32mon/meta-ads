@@ -50,7 +50,7 @@ async function loadSel(raw){
     audData=Object.fromEntries(results.map(r=>[r.acct.id,r.aud]));
     compSummary=comparison;
     renderSum();renderCompareCard();renderView();renderAcctChart();renderCampChart();
-    renderFunnel();renderProductCodes();renderProductIntelligence();renderProductCopyBox();
+    renderProductCopyBox();
     renderBadDayList(getBadDayHits());
     setTimeout(()=>{checkAlerts();checkBadDayProtection();},800);setTimeout(evalRules,1200);
     document.getElementById('lu').textContent='Updated '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});

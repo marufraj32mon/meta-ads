@@ -1,7 +1,14 @@
 // ═══════════════════════════════════════
 // ANALYTICS
 // ═══════════════════════════════════════
-function renderAnalytics(){renderTrend();renderHeatmap();renderBestTimeDay();renderPerf();renderFunnel();renderProductCodes();renderProductIntelligence()}
+function renderAnalytics() {
+  renderTrend();
+  renderHeatmap();
+  renderBestTimeDay();
+  renderPerf();
+  renderFunnel();
+  renderProductCodes();
+}
 async function renderTrend(){
   if(!accounts.length)return;
   const dp=dpParams();
